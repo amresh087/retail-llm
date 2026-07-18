@@ -1,0 +1,514 @@
+
+/* ==========================================================================
+   DESIGN SYSTEM TOKENS & VARIABLES
+   ========================================================================== */
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  
+  --success: #10b981;
+  --success-dark: #059669;
+  --danger: #ef4444;
+  --danger-dark: #dc2626;
+  --warning: #f59e0b;
+  --info: #0ea5e9;
+
+  --neutral-50: #f8fafc;
+  --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0;
+  --neutral-300: #cbd5e1;
+  --neutral-500: #64748b;
+  --neutral-600: #475569;
+  --neutral-700: #334155;
+  --neutral-800: #1e293b;
+  --neutral-900: #0f172a;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08);
+  
+  --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+/* ==========================================================================
+   PAGE LAYOUT CONTAINER
+   ========================================================================== */
+.billing-page-container {
+display: grid;
+  /* 70% for the first column, 30% for the second */
+  grid-template-columns: 70% 30%;
+  gap: 1rem; /* Adjust space between columns as needed */
+  width: 100%;
+}
+
+/* Optional: Ensure content inside columns doesn't overflow */
+.billing-left {
+  min-width: 0; 
+}
+
+.billing-right {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Takes full height of screen */
+  background: white;
+  border-left: 1px solid var(--neutral-200);
+}
+
+.billing-controls-top {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+
+.billing-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+}
+
+/* ==========================================================================
+   BILLING MAIN CARD & HEADER
+   ========================================================================== */
+.billing-main-card {
+  left: 0;
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--neutral-200); 
+  overflow: hidden;
+  animation: slideInDown 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-left: 0;
+  left: 0;
+}
+
+.billing-header-section {
+  background: var(--neutral-50);
+  padding: 1.75rem 2rem;
+  border-bottom: 1px solid var(--neutral-200);
+  border-left: 4px solid var(--primary);
+}
+
+.billing-title-area {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.billing-title-area h5 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--neutral-900);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.billing-badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--neutral-100);
+  color: var(--neutral-700);
+  border: 1px solid var(--neutral-200);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.billing-body {
+  padding: 2.5rem 2rem;
+}
+
+/* ==========================================================================
+   FORMS & INPUT GROUPS
+   ========================================================================== */
+.billing-barcode-section {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.form-control-custom {
+  flex: 1;
+  min-width: 240px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--neutral-300);
+  padding: 0.65rem 1rem;
+  font-size: 0.95rem;
+  color: var(--neutral-900);
+  background-color: #ffffff;
+  transition: var(--transition-fast);
+}
+
+.form-control-custom:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  outline: none;
+}
+
+/* ==========================================================================
+   BUTTONS COMPONENT SUITE
+   ========================================================================== */
+.btn-custom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  padding: 0.65rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: var(--transition-fast);
+}
+
+.btn-primary-custom {
+  background-color: var(--primary);
+  color: #ffffff;
+}
+.btn-primary-custom:hover {
+  background-color: var(--primary-dark);
+}
+
+.billing-control-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   ENTERPRISE DATA TABLES (CART)
+   ========================================================================== */
+.billing-cart-section {
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 2rem;
+}
+
+.cart-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #ffffff;
+}
+
+.cart-table thead {
+  background-color: var(--neutral-100);
+  border-bottom: 1px solid var(--neutral-200);
+}
+
+.cart-table th {
+  padding: 0.85rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--neutral-600);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cart-table td {
+  padding: 1rem;
+  color: var(--neutral-700);
+  font-size: 0.95rem;
+  border-bottom: 1px solid var(--neutral-100);
+  vertical-align: middle;
+}
+
+.cart-table tbody tr:hover {
+  background-color: var(--neutral-50);
+}
+
+.cart-table-cell-item {
+  font-weight: 600;
+  color: var(--neutral-900);
+}
+
+.cart-table-cell-price {
+  font-weight: 600;
+  color: var(--neutral-900);
+}
+
+.cart-qty-control {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--neutral-300);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+.cart-qty-control button {
+  border: none;
+  background-color: var(--neutral-50);
+  color: var(--neutral-700);
+  width: 1.85rem;
+  height: 1.85rem;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-fast);
+}
+
+.cart-qty-control button:hover {
+  background-color: var(--neutral-200);
+  color: var(--neutral-900);
+}
+
+.cart-qty-control input {
+  min-width: 2.25rem;
+  width: 2.25rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: none;
+  padding: 0;
+  color: var(--neutral-900);
+}
+
+/* ==========================================================================
+   TOTALS & FOOTER SECTION
+   ========================================================================== */
+.billing-totals-section {
+  background: var(--neutral-50);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  border: 1px solid var(--neutral-200);
+  margin-top: 1.5rem;
+}
+
+.billing-totals-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.billing-totals-row-label {
+  color: var(--neutral-500);
+}
+
+.billing-totals-row-value {
+  font-weight: 600;
+  color: var(--neutral-900);
+}
+
+.billing-total-section {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 1.5rem 0;
+  background-color: transparent;
+  border-top: 2px solid var(--neutral-200);
+  margin-top: 1.75rem;
+}
+
+.billing-total-label {
+  color: var(--neutral-800);
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.billing-total-badge {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  padding: 0.6rem 1.75rem !important;
+  font-size: 1.4rem !important;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* ==========================================================================
+   VOICE ASSISTANT FLOATING WORKSPACE CLASSES
+   ========================================================================== */
+
+.voice-assistant-fixed {
+  border-top: 1px solid var(--neutral-200);
+  padding: 10px;
+  background: var(--neutral-50);
+}
+
+.voice-terminal-window {
+/* Ensure it has a positioning context */
+  position: fixed; 
+  right: 1px;
+  /* Set a high z-index to stay above everything else */
+  z-index: 9999; 
+  
+  width: 100% !important;
+  max-width: 400px !important; /* Consider limiting width for better UI */
+  margin: 0 !important;
+}
+
+
+.voice-floating-trigger {
+  position: fixed;
+  right: 160px;
+  bottom: 16px;
+  z-index: 1600;
+}
+
+.voice-floating-trigger .btn {
+  border-radius: 20px;
+  padding: 8px 14px;
+  box-shadow: var(--shadow-md);
+  background-color: var(--primary);
+  border: none;
+  font-weight: 600;
+}
+
+
+
+.voice-terminal-card {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  background: #ffffff;
+  border: 1px solid var(--neutral-200);
+}
+
+.voice-terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--neutral-50);
+  border-bottom: 1px solid var(--neutral-200);
+  border-left: 4px solid var(--primary);
+}
+
+.voice-terminal-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--neutral-900);
+}
+
+.voice-terminal-subtitle {
+  font-size: 11px;
+  color: var(--neutral-500);
+}
+
+.voice-terminal-header-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.voice-terminal-header-controls .btn-sm {
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.voice-terminal-collapse-btn {
+  color: var(--neutral-500);
+  text-decoration: none;
+  padding: 0 4px;
+  font-size: 14px;
+}
+
+.voice-terminal-body {
+  padding: 12px;
+  background-color: #ffffff;
+  /* Adds a minimum height to the body section */
+  min-height: 550px; 
+}
+
+.voice-transcript-box {
+  border-radius: 8px;
+  padding: 10px;
+  min-height: 48px;
+  background: var(--neutral-50);
+  border: 1px solid var(--neutral-300);
+  white-space: pre-wrap;
+  color: var(--neutral-700);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.voice-history-stream {
+  margin-top: 10px;
+  /* Increase this value to make the window taller */
+  max-height: 350px; 
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.voice-empty-log {
+  font-size: 12px;
+  color: var(--neutral-400);
+  text-align: center;
+  padding: 16px 0;
+}
+
+.voice-bubble-wrapper {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.voice-bubble {
+  padding: 8px 12px;
+  border-radius: 8px;
+  max-width: 82%;
+  white-space: pre-wrap;
+  font-size: 12.5px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.voice-bubble.user {
+  background: var(--neutral-100);
+  color: var(--neutral-800);
+  border-right: 3px solid var(--neutral-600);
+  border-top: 1px solid var(--neutral-200);
+  border-bottom: 1px solid var(--neutral-200);
+}
+
+.voice-bubble.assistant {
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--success-dark);
+  border-left: 3px solid var(--success);
+  border-top: 1px solid rgba(16, 185, 129, 0.15);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.voice-runtime-error {
+  margin-top: 8px;
+  color: var(--danger-dark);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   RESPONSIVE DESIGN BREAKPOINTS
+   ========================================================================== */
+@media (max-width: 768px) {
+  .billing-content { padding: 1rem; }
+  .billing-body { padding: 1.5rem 1rem; }
+  .billing-barcode-section { flex-direction: column; align-items: stretch; }
+  .form-control-custom { min-width: 100%; }
+}
+
+/* ==========================================================================
+   MICRO-ANIMATIONS ENGINE
+   ========================================================================== */
+@keyframes slideInDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}

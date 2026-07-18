@@ -1,0 +1,176 @@
+/* Wrapper */
+.shopkeeper-header-wrapper {
+  margin-bottom: 12px;
+}
+
+/* Header */
+.shopkeeper-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 12px 18px;
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+
+  border: 1px solid rgba(0, 0, 0, 0.06);
+
+  box-shadow: 
+    0 1px 2px rgba(0,0,0,0.04),
+    0 4px 12px rgba(0,0,0,0.06);
+
+  transition: all 0.25s ease;
+}
+
+/* Sticky header (optional) */
+.shopkeeper-header.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+/* Left Section */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Back Button */
+.back-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #f3f4f6;
+  color: #111827;
+
+  text-decoration: none;
+  font-size: 16px;
+  font-weight: 600;
+
+  border: 1px solid #e5e7eb;
+
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  background: #e5e7eb;
+  transform: translateY(-1px);
+}
+
+.back-button:active {
+  transform: scale(0.95);
+}
+
+/* Title Group */
+.header-title-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Title */
+.shopkeeper-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+  line-height: 1.3;
+  letter-spacing: -0.2px;
+}
+
+/* Description */
+.shopkeeper-description {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Right Section */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Buttons */
+.header-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+
+  background: white;
+  color: #111827;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.header-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+/* Primary Button */
+.header-btn.primary {
+  background: #111827;
+  color: white;
+  border: none;
+}
+
+.header-btn.primary:hover {
+  background: #1f2937;
+}
+
+/* Divider */
+.header-divider {
+  width: 1px;
+  height: 24px;
+  background: #e5e7eb;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .shopkeeper-header {
+    padding: 10px 14px;
+  }
+
+  .shopkeeper-title {
+    font-size: 16px;
+  }
+
+  .shopkeeper-description {
+    font-size: 11px;
+  }
+
+  .back-button {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .shopkeeper-description {
+    display: none;
+  }
+
+  .shopkeeper-header {
+    padding: 8px 12px;
+  }
+
+  .header-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+}

@@ -1,0 +1,544 @@
+/* ===================================
+   INVENTORY PAGE CONTAINER & LAYOUT
+   =================================== */
+
+.inventory-page-container {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+}
+
+.inventory-page-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -10%;
+  width: 600px;
+  height: 600px;
+  background: rgba(79, 184, 204, 0.08);
+  border-radius: 50%;
+  z-index: 0;
+}
+
+.inventory-page-container::after {
+  content: '';
+  position: absolute;
+  bottom: -30%;
+  left: -5%;
+  width: 500px;
+  height: 500px;
+  background: rgba(79, 184, 204, 0.06);
+  border-radius: 50%;
+  z-index: 0;
+}
+
+.inventory-content {
+  position: relative;
+  z-index: 2;
+  padding: 2rem 1rem;
+  max-width: 1200px !important;
+}
+
+/* ===================================
+   LOADING STATE
+   =================================== */
+
+.inventory-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  gap: 1.5rem;
+}
+
+.inventory-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(79, 184, 204, 0.15);
+  border-top-color: #4fb8cc;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.inventory-loading-container p {
+  color: #555;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* ===================================
+   SEARCH CARD
+   =================================== */
+
+.inventory-search-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  margin-bottom: 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.inventory-search-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #4fb8cc 0%, #2b9fa3 100%);
+}
+
+.inventory-search-header {
+  padding: 2rem 2rem 1.5rem 2rem;
+  border-bottom: 1px solid rgba(79, 184, 204, 0.1);
+  background: linear-gradient(135deg, rgba(79, 184, 204, 0.03) 0%, rgba(43, 159, 163, 0.02) 100%);
+}
+
+.inventory-search-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.inventory-search-body {
+  padding: 2rem 2rem;
+}
+
+.inventory-search-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inventory-input {
+  padding: 0.75rem 1.2rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  width: 100%;
+}
+
+.inventory-input:focus {
+  outline: none;
+  border-color: #4fb8cc;
+  box-shadow: 0 0 0 0.2rem rgba(79, 184, 204, 0.15);
+}
+
+.inventory-search-icon {
+  position: absolute;
+  right: 1.5rem;
+  font-size: 1.2rem;
+  color: #4fb8cc;
+  pointer-events: none;
+}
+
+/* ===================================
+   PRODUCTS GRID
+   =================================== */
+
+.inventory-products {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* ===================================
+   PRODUCT CARD
+   =================================== */
+
+.inventory-product-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.95) 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+.inventory-product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.inventory-product-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #4fb8cc 0%, #2b9fa3 100%);
+}
+
+.inventory-product-header {
+  padding: 2rem 2rem 1.5rem 2rem;
+  border-bottom: 1px solid rgba(79, 184, 204, 0.1);
+  background: linear-gradient(135deg, rgba(79, 184, 204, 0.03) 0%, rgba(43, 159, 163, 0.02) 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inventory-product-info {
+  flex: 1;
+}
+
+.inventory-product-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.3px;
+}
+
+.inventory-product-sku-section {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.inventory-product-sku {
+  font-size: 0.9rem;
+  color: #999;
+  font-weight: 500;
+}
+
+.inventory-product-barcode {
+  display: flex;
+  align-items: center;
+}
+
+.inventory-product-barcode-img {
+  max-width: 80px;
+  height: auto;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 4px;
+  padding: 2px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(79, 184, 204, 0.2);
+}
+
+.inventory-product-barcode-img:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(79, 184, 204, 0.3);
+}
+
+.inventory-total-qty-badge {
+  padding: 0.75rem 1.2rem !important;
+  background: linear-gradient(135deg, #4fb8cc 0%, #2b9fa3 100%) !important;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 12px rgba(79, 184, 204, 0.3);
+  white-space: nowrap;
+  color: white;
+}
+
+/* ===================================
+   BATCHES TABLE
+   =================================== */
+
+.inventory-batches-wrapper {
+  overflow-x: auto;
+  padding: 2rem 2rem;
+}
+
+.inventory-batches-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+}
+
+.inventory-batches-table thead {
+  background: linear-gradient(135deg, rgba(79, 184, 204, 0.08) 0%, rgba(43, 159, 163, 0.06) 100%);
+}
+
+.inventory-batches-table th {
+  padding: 1rem 1.2rem;
+  text-align: left;
+  font-weight: 700;
+  color: #1a1a1a;
+  border-bottom: 2px solid rgba(79, 184, 204, 0.15);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.inventory-th-center {
+  text-align: center;
+}
+
+.inventory-batches-table td {
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.inventory-batches-table tbody tr:hover {
+  background: rgba(79, 184, 204, 0.03);
+  transition: all 0.2s ease;
+}
+
+.inventory-low-stock-row {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.08) 0%, rgba(251, 188, 4, 0.05) 100%);
+}
+
+.inventory-low-stock-row:hover {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.12) 0%, rgba(251, 188, 4, 0.08) 100%);
+}
+
+.inventory-batch-no {
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.inventory-expiry-date {
+  color: #666;
+  font-weight: 500;
+}
+
+.inventory-quantity {
+  font-weight: 700;
+  color: #1a1a1a;
+  text-align: center;
+}
+
+.inventory-td-center {
+  text-align: center;
+}
+
+/* ===================================
+   BADGES
+   =================================== */
+
+.badge {
+  display: inline-block;
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.inventory-badge-danger {
+  background: linear-gradient(135deg, #ef5350 0%, #e53935 100%);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(239, 83, 80, 0.3);
+}
+
+.inventory-badge-success {
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.bg-danger {
+  background: linear-gradient(135deg, rgba(239, 83, 80, 0.15) 0%, rgba(229, 57, 53, 0.1) 100%) !important;
+  color: #c62828;
+  border: 1px solid rgba(239, 83, 80, 0.2);
+}
+
+.bg-warning {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(251, 188, 4, 0.1) 100%) !important;
+  color: #f57f17;
+  border: 1px solid rgba(255, 193, 7, 0.2);
+}
+
+.bg-success {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(67, 160, 71, 0.1) 100%) !important;
+  color: #388e3c;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}
+
+/* ===================================
+   EMPTY STATE
+   =================================== */
+
+.inventory-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  text-align: center;
+  gap: 1rem;
+}
+
+.inventory-empty-icon {
+  font-size: 5rem;
+  opacity: 0.6;
+  margin-bottom: 1rem;
+}
+
+.inventory-empty-text {
+  color: #666;
+  font-size: 1.2rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* ===================================
+   RESPONSIVE DESIGN
+   =================================== */
+
+@media (max-width: 768px) {
+  .inventory-content {
+    padding: 1rem 0.5rem;
+  }
+
+  .inventory-search-header,
+  .inventory-product-header {
+    padding: 1.5rem 1rem 1rem 1rem;
+  }
+
+  .inventory-search-body,
+  .inventory-batches-wrapper {
+    padding: 1.5rem 1rem;
+  }
+
+  .inventory-search-title,
+  .inventory-product-name {
+    font-size: 1.1rem;
+  }
+
+  .inventory-input {
+    padding: 0.6rem 2.5rem 0.6rem 1rem;
+    font-size: 0.95rem;
+  }
+
+  .inventory-search-icon {
+    right: 1rem;
+    font-size: 1rem;
+  }
+
+  .inventory-total-qty-badge {
+    padding: 0.6rem 1rem !important;
+    font-size: 0.85rem;
+  }
+
+  .inventory-product-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .inventory-batches-table th,
+  .inventory-batches-table td {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .inventory-product-sku {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .inventory-content {
+    padding: 1rem 0;
+  }
+
+  .inventory-search-card,
+  .inventory-product-card {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .inventory-search-header,
+  .inventory-product-header {
+    padding: 1rem 1rem 0.75rem 1rem;
+  }
+
+  .inventory-search-body,
+  .inventory-batches-wrapper {
+    padding: 1rem;
+  }
+
+  .inventory-search-title,
+  .inventory-product-name {
+    font-size: 1rem;
+  }
+
+  .inventory-input {
+    padding: 0.5rem 2.2rem 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .inventory-search-icon {
+    right: 0.75rem;
+    font-size: 1rem;
+  }
+
+  .inventory-product-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .inventory-total-qty-badge {
+    width: 100%;
+    text-align: center;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.8rem;
+  }
+
+  .inventory-batches-table th,
+  .inventory-batches-table td {
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .inventory-batch-no,
+  .inventory-quantity {
+    font-size: 0.8rem;
+  }
+
+  .inventory-product-sku {
+    font-size: 0.8rem;
+  }
+
+  .inventory-product-barcode-img {
+    max-width: 60px;
+  }
+
+  .inventory-empty-icon {
+    font-size: 3.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .inventory-empty-text {
+    font-size: 1rem;
+  }
+
+  .badge {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.7rem;
+  }
+}
+

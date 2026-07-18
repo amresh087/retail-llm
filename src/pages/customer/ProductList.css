@@ -1,0 +1,113 @@
+/* ============================
+   Product List Styling
+============================ */
+
+.product-card {
+  transition: all 0.3s ease;
+  border: 1px solid #e0e0e0;
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15) !important;
+}
+
+.hover-card {
+  transition: all 0.3s ease;
+}
+
+.hover-card:hover {
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Badge styling */
+.badge {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.6rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+/* Product card price styling */
+.product-card h5 {
+  font-weight: 600;
+  font-size: 1.3rem;
+}
+
+/* Search input styling */
+.form-control {
+  border-radius: 0.375rem;
+  border: 1px solid #d0d0d0;
+  transition: border-color 0.2s ease;
+}
+
+.form-control:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+/* Filter section */
+.bg-light {
+  background-color: #f8f9fa !important;
+}
+
+/* Active filters display */
+.badge.bg-info {
+  background-color: #4d9dd6 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+}
+
+/* Button styling */
+.btn-close {
+  display: inline-block;
+  padding: 0 0.2rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  border-color: #007bff;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+  border-color: #004085;
+  transform: scale(1.05);
+}
+
+/* Grid responsive styling */
+@media (max-width: 768px) {
+  .product-card {
+    margin-bottom: 1rem;
+  }
+
+  .badge {
+    font-size: 0.7rem;
+  }
+}
+
+/* Empty state styling */
+.text-center h5 {
+  color: #495057;
+  font-weight: 600;
+}
+
+/* Loading spinner */
+.spinner-border {
+  color: #007bff;
+}
+
+/* Product details text */
+.text-muted {
+  color: #6c757d;
+}
+
+small {
+  font-size: 0.875rem;
+}

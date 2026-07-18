@@ -1,0 +1,30 @@
+/* Mobile-friendly global rules */
+
+html, body, #root {
+  height: 100%;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Make form controls full width on small screens */
+@media (max-width: 575.98px) {
+  .form-control, .form-select {
+    width: 100% !important;
+  }
+
+  main {
+    padding: 1rem !important;
+  }
+
+  .card {
+    margin: 0.5rem !important;
+  }
+
+  .container {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}

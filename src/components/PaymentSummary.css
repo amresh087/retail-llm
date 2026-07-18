@@ -1,0 +1,124 @@
+/* Payment Summary Styles */
+
+.payment-summary-container {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.summary-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.summary-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.summary-row:last-of-type:not(.total) {
+  border-bottom: none;
+}
+
+.summary-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.summary-value {
+  font-weight: 600;
+  color: #333;
+}
+
+.summary-value.wallet {
+  color: #2196F3;
+}
+
+.summary-value.cash {
+  color: #FF9800;
+}
+
+.summary-row.info {
+  border-bottom: none;
+  padding: 8px 0;
+  background: #f5f5f5;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+}
+
+.summary-row.total {
+  border-top: 2px solid #2196F3;
+  border-bottom: none;
+  padding: 12px 0;
+  margin-top: 8px;
+}
+
+.summary-row.total .summary-label {
+  color: #2196F3;
+  font-weight: 700;
+}
+
+.summary-value-total {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2196F3;
+}
+
+/* Error & Success Messages */
+.summary-error {
+  background: #ffebee;
+  border: 1px solid #ef5350;
+  color: #c62828;
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.summary-success {
+  background: #e8f5e9;
+  border: 1px solid #66bb6a;
+  color: #2e7d32;
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .payment-summary-container {
+    padding: 12px;
+  }
+
+  .summary-row {
+    font-size: 12px;
+  }
+
+  .summary-label {
+    font-size: 12px;
+  }
+
+  .summary-value {
+    font-size: 12px;
+  }
+}
