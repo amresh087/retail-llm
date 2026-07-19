@@ -6,6 +6,7 @@ export interface DocumentRecord {
   type: string;
   tenant: string;
   transactionTypeCode?: string;
+  mappingType?: string;
   version: string;
   status: string;
   contentType?: string;
@@ -17,6 +18,7 @@ interface DocumentPayload {
   type?: string;
   tenant?: string;
   transactionTypeCode?: string;
+  mappingType?: string;
   version?: string;
   status?: string;
   contentType?: string;
@@ -28,6 +30,7 @@ interface DocumentApiResponse {
   type?: string;
   tenant?: string;
   transactionTypeCode?: string;
+  mappingType?: string;
   version?: string;
   status?: string;
   contentType?: string;
@@ -40,6 +43,7 @@ const normalizeDocument = (doc: DocumentApiResponse): DocumentRecord => ({
   type: doc.type ?? 'PDF',
   tenant: doc.tenant ?? 'Unknown',
   transactionTypeCode: doc.transactionTypeCode ?? '',
+  mappingType: doc.mappingType ?? '',
   version: doc.version ?? 'v1',
   status: doc.status ?? 'Indexed',
   contentType: doc.contentType,
@@ -65,6 +69,7 @@ export const documentService = {
     if (payload.transactionTypeCode) formData.append('transactionTypeCode', payload.transactionTypeCode);
     if (payload.version) formData.append('version', payload.version);
     if (payload.status) formData.append('status', payload.status);
+    if (payload.mappingType) formData.append('mappingType', payload.mappingType);
     if (payload.contentType) formData.append('contentType', payload.contentType);
 
     const response = await api.post('/documents/upload', formData, {

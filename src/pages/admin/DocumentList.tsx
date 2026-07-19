@@ -3,6 +3,7 @@ import { Card, Table, Button, Badge, Modal, Form, Alert, Spinner } from 'react-b
 import { documentService, type DocumentRecord } from '../../services/documentService';
 import { tenantService, type TenantRecord } from '../../services/tenantService';
 import { transactionTypeService, type TransactionTypeRecord } from '../../services/transactionTypeService';
+import './DocumentList.css';
 
 const DocumentList = () => {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -15,6 +16,7 @@ const DocumentList = () => {
   const [formData, setFormData] = useState({
     name: '',
     type: 'PDF',
+    mappingType: 'mapping-xslt-templet-xml',
     tenant: '',
     transactionTypeCode: '',
     version: 'v1',
@@ -84,7 +86,7 @@ const DocumentList = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', type: 'PDF', tenant: tenantOptions[0]?.name ?? '', transactionTypeCode: '', version: 'v1', status: 'Indexed', contentType: '' });
+    setFormData({ name: '', type: 'PDF', mappingType: 'mapping-xslt-templet-xml', tenant: tenantOptions[0]?.name ?? '', transactionTypeCode: '', version: 'v1', status: 'Indexed', contentType: '' });
     setSelectedFile(null);
     setEditingDoc(null);
   };
@@ -99,8 +101,9 @@ const DocumentList = () => {
     setFormData({
       name: doc.name,
       type: doc.type,
+      mappingType: doc.mappingType ?? 'mapping-xslt-templet-xml',
       tenant: doc.tenant,
-      transactionTypeCode: (doc as any).transactionTypeCode ?? '',
+      transactionTypeCode: doc.transactionTypeCode ?? '',
       version: doc.version,
       status: doc.status,
       contentType: doc.contentType ?? '',
@@ -160,8 +163,8 @@ const DocumentList = () => {
   };
 
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="document-list-page">
+      <div className="document-list-header">
         <div>
           <h2>📄 Mapping Documents</h2>
           <p className="text-muted">Upload and manage mapping documents</p>
@@ -169,7 +172,7 @@ const DocumentList = () => {
         <Button variant="primary" onClick={openCreateModal}>📤 Upload Document</Button>
       </div>
 
-      <Card className="border-0 shadow-sm">
+      <Card className="border-0 shadow-sm document-list-card">
         <Card.Body>
           {error && <Alert variant="danger">{error}</Alert>}
           {loading ? (
@@ -178,37 +181,41 @@ const DocumentList = () => {
               <span>Loading documents...</span>
             </div>
           ) : (
-            <Table hover>
-              <thead>
-                <tr>
-                  <th>Trans Code</th>
-                  <th>Trans Name</th>
-                  <th>Docs Name</th>
-                  <th>Type</th>
-                  <th>Tenant</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((doc) => (
-                  <tr key={doc.id}>
-                    <td>{doc.transactionTypeCode || '-'}</td>
-                    <td>{getTransactionTypeName(doc.transactionTypeCode) || '-'}</td>
-                    <td className="fw-medium">{doc.name}</td>
-                    <td>{doc.type}</td>
-                    <td>{doc.tenant}</td>                   
-                    <td>
-                      <Badge bg={getStatusColor(doc.status)}>{doc.status}</Badge>
-                    </td>
-                    <td>
-                      <Button variant="outline-primary" size="sm" className="me-2" onClick={() => openEditModal(doc)}>Edit</Button>
-                      <Button variant="outline-danger" size="sm" onClick={() => handleDelete(doc.id)}>Delete</Button>
-                    </td>
+            <div className="table-responsive">
+              <Table striped bordered hover size="sm" className="document-list-table mb-0">
+                <thead>
+                  <tr>
+                    <th>Trans Code</th>
+                    <th>Trans Name</th>
+                    <th>Docs Name</th>
+                    <th>Type</th>
+                    <th>Mapping Type</th>
+                    <th>Tenant</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {documents.map((doc) => (
+                    <tr key={doc.id}>
+                      <td>{doc.transactionTypeCode || '-'}</td>
+                      <td>{getTransactionTypeName(doc.transactionTypeCode) || '-'}</td>
+                      <td className="document-name-cell">{doc.name}</td>
+                      <td>{doc.type}</td>
+                      <td className="mapping-type-cell">{(doc as any).mappingType || '-'}</td>
+                      <td className="tenant-cell">{doc.tenant}</td>                   
+                      <td>
+                        <Badge className="document-status-badge" bg={getStatusColor(doc.status)}>{doc.status}</Badge>
+                      </td>
+                      <td>
+                        <Button variant="outline-primary" size="sm" className="me-2" onClick={() => openEditModal(doc)}>Edit</Button>
+                        <Button variant="outline-danger" size="sm" onClick={() => handleDelete(doc.id)}>Delete</Button>
+                      </td>
                   </tr>
                 ))}
               </tbody>
             </Table>
+            </div>
           )}
         </Card.Body>
       </Card>
@@ -234,6 +241,13 @@ const DocumentList = () => {
                 <option value="PDF">PDF</option>
                 <option value="XML">XML</option>
                 <option value="TXT">TXT</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Mapping Type</Form.Label>
+              <Form.Select value={formData.mappingType} onChange={(event) => setFormData((current) => ({ ...current, mappingType: event.target.value }))}>
+                <option value="mapping-xslt-templet-xml">mapping-xslt-templet-xml</option>
+                <option value="idoc-output-sample">idoc-output-sample</option>
               </Form.Select>
             </Form.Group>
             <Form.Group className="mb-3">

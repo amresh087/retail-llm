@@ -1,0 +1,74 @@
+.document-list-page {
+  padding: 1rem 0;
+}
+
+.document-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.document-list-card {
+  border-radius: 1rem;
+}
+
+.document-list-table th,
+.document-list-table td {
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.document-list-table td.document-name-cell,
+.document-list-table td.mapping-type-cell,
+.document-list-table td.tenant-cell {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.document-list-table td.tenant-cell {
+  max-width: 140px;
+}
+
+.document-list-table td.document-name-cell {
+  font-weight: 500;
+}
+
+.document-list-table th {
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.document-list-table tbody tr:hover {
+  background-color: rgba(0, 123, 255, 0.04);
+}
+
+.document-status-badge {
+  font-size: 0.75rem;
+  padding: 0.45em 0.6em;
+}
+
+.document-list-table .btn {
+  min-width: 68px;
+}
+
+@media (max-width: 768px) {
+  .document-list-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .document-list-table th,
+  .document-list-table td {
+    white-space: normal;
+  }
+
+  .document-list-table td.document-name-cell,
+  .document-list-table td.mapping-type-cell,
+  .document-list-table td.tenant-cell {
+    max-width: none;
+  }
+}
