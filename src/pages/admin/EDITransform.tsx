@@ -12,25 +12,6 @@ const escapeXml = (value: string) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
-const ediTransactionTypes = [
-  { code: '810', name: 'Invoice' },
-  { code: '820', name: 'Payment Order / Remittance Advice' },
-  { code: '824', name: 'Application Advice' },
-  { code: '830', name: 'Planning Schedule' },
-  { code: '846', name: 'Inventory Inquiry / Advice' },
-  { code: '850', name: 'Purchase Order' },
-  { code: '855', name: 'Purchase Order Acknowledgment' },
-  { code: '856', name: 'Advance Ship Notice (ASN)' },
-  { code: '862', name: 'Shipping Schedule' },
-  { code: '864', name: 'Text Message' },
-  { code: '870', name: 'Order Status Report' },
-  { code: '940', name: 'Warehouse Shipping Order' },
-  { code: '943', name: 'Warehouse Stock Transfer Shipment Advice' },
-  { code: '944', name: 'Warehouse Stock Transfer Receipt Advice' },
-  { code: '945', name: 'Warehouse Shipping Advice' },
-  { code: '997', name: 'Functional Acknowledgment' },
-];
-
 const buildXmlFromEdi = (content: string, tenant: string, type: string, fileName: string, documentId: string) => {
   const lines = content
     .split(/\r?\n/)
@@ -199,9 +180,9 @@ const EDITransform = () => {
                     onChange={(e) => setSelectedType(e.target.value)}
                   >
                     <option value="">Choose Type</option>
-                    {ediTransactionTypes.map((transactionType) => (
-                      <option key={transactionType.code} value={transactionType.code}>
-                        {transactionType.code} - {transactionType.name}
+                    {transactionTypes.map((transactionType) => (
+                      <option key={transactionType.id} value={transactionType.code}>
+                        {transactionType.code} - {transactionType.name || 'Transaction'}
                       </option>
                     ))}
                   </Form.Select>
