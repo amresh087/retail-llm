@@ -15,7 +15,7 @@ const DocumentList = () => {
   const [editingDoc, setEditingDoc] = useState<DocumentRecord | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    type: 'PDF',
+    type: 'XML',
     mappingType: 'mapping-xslt-templet-xml',
     tenant: '',
     transactionTypeCode: '',
@@ -86,7 +86,7 @@ const DocumentList = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', type: 'PDF', mappingType: 'mapping-xslt-templet-xml', tenant: tenantOptions[0]?.name ?? '', transactionTypeCode: '', version: 'v1', status: 'Indexed', contentType: '' });
+    setFormData({ name: '', type: 'XML', mappingType: 'mapping-xslt-templet-xml', tenant: tenantOptions[0]?.name ?? '', transactionTypeCode: '', version: 'v1', status: 'Indexed', contentType: '' });
     setSelectedFile(null);
     setEditingDoc(null);
   };
@@ -113,17 +113,33 @@ const DocumentList = () => {
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
-    setSelectedFile(file);
-    if (!file) return;
+    if (!file) {
+      setSelectedFile(null);
+      setError('');
+      return;
+    }
 
     const extension = file.name.split('.').pop()?.toLowerCase();
-    const inferredType = extension === 'xml' ? 'XML' : extension === 'txt' ? 'TXT' : 'PDF';
+    if (extension !== 'xml') {
+      setSelectedFile(null);
+      setError('Only XML files are supported for document uploads.');
+      event.target.value = '';
+      setFormData((current) => ({
+        ...current,
+        name: '',
+        type: 'XML',
+        contentType: '',
+      }));
+      return;
+    }
 
+    setSelectedFile(file);
+    setError('');
     setFormData((current) => ({
       ...current,
       name: file.name,
-      type: inferredType,
-      contentType: file.type || (extension === 'xml' ? 'application/xml' : extension === 'txt' ? 'text/plain' : 'application/pdf'),
+      type: 'XML',
+      contentType: file.type || 'application/xml',
     }));
   };
 
@@ -228,8 +244,8 @@ const DocumentList = () => {
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">
               <Form.Label>Document File</Form.Label>
-              <Form.Control type="file" accept=".pdf,.xml,.txt" onChange={handleFileSelect} />
-              <Form.Text className="text-muted">Choose a PDF, XML, or TXT file from your computer.</Form.Text>
+              <Form.Control type="file" accept=".xml" onChange={handleFileSelect} />
+              <Form.Text className="text-muted">Choose an XML file from your computer.</Form.Text>
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Document Name</Form.Label>
@@ -238,9 +254,7 @@ const DocumentList = () => {
             <Form.Group className="mb-3">
               <Form.Label>Type</Form.Label>
               <Form.Select value={formData.type} onChange={(event) => setFormData((current) => ({ ...current, type: event.target.value }))}>
-                <option value="PDF">PDF</option>
                 <option value="XML">XML</option>
-                <option value="TXT">TXT</option>
               </Form.Select>
             </Form.Group>
             <Form.Group className="mb-3">
