@@ -12,6 +12,8 @@ const DocumentList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupMessage, setPopupMessage] = useState('');
   const [editingDoc, setEditingDoc] = useState<DocumentRecord | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -56,7 +58,7 @@ const DocumentList = () => {
     try {
       setLoading(true);
       setError('');
-      const data = await documentService.getAll();
+      const data = await documentService.getAll('mappingdoc');
       setDocuments(data);
     } catch (err) {
       setError('Unable to load documents from the API.');
@@ -160,8 +162,14 @@ const DocumentList = () => {
       setShowModal(false);
       resetForm();
       setError('');
-    } catch (err) {
-      setError(editingDoc ? 'Unable to update the document.' : 'Unable to upload the document.');
+      setPopupMessage('');
+      setShowPopup(false);
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err?.message || (editingDoc ? 'Unable to update the document.' : 'Unable to upload the document.');
+      setError(message);
+      setPopupMessage(message);
+      setShowPopup(true);
+      window.alert(message);
       console.error(err);
     }
   };
@@ -236,11 +244,16 @@ const DocumentList = () => {
         </Card.Body>
       </Card>
 
-      <Modal show={showModal} onHide={() => { setShowModal(false); resetForm(); }} centered>
+      <Modal show={showModal} onHide={() => { setShowModal(false); resetForm(); setError(''); setPopupMessage(''); setShowPopup(false); }} centered>
         <Modal.Header closeButton>
           <Modal.Title>{editingDoc ? '✏️ Edit Document' : '📤 Upload Document'}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
+          {showPopup && (
+            <Alert variant="warning" className="mb-3" dismissible onClose={() => { setShowPopup(false); setPopupMessage(''); }}>
+              {popupMessage}
+            </Alert>
+          )}
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">
               <Form.Label>Document File</Form.Label>

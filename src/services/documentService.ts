@@ -50,8 +50,10 @@ const normalizeDocument = (doc: DocumentApiResponse): DocumentRecord => ({
 });
 
 export const documentService = {
-  getAll: async (): Promise<DocumentRecord[]> => {
-    const response = await api.get('/documents');
+  getAll: async (mappingDoc?: string): Promise<DocumentRecord[]> => {
+    const response = await api.get('/documents', {
+      params: mappingDoc ? { mappingdoc: mappingDoc } : undefined,
+    });
     const data = Array.isArray(response.data) ? (response.data as DocumentApiResponse[]) : [];
     return data.map(normalizeDocument);
   },
