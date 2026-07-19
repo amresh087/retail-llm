@@ -123,8 +123,10 @@ const EDITransform = () => {
       };
 
       const uploadedDocument = await documentService.upload(documentPayload, file);
+      /*
       const xml = buildXmlFromEdi(content, selectedTenant, selectedType, uploadedDocument.name || file.name, uploadedDocument.id || 'pending');
       setResult(xml);
+      */
     } catch (err) {
       console.error(err);
       setError('Unable to upload the file to the document API and transform it.');
