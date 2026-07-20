@@ -1,4 +1,4 @@
-import { Card, Button, Row, Col, Form, Alert } from 'react-bootstrap';
+import { Card, Button, Row, Col, Form, Alert, Badge, ListGroup, Spinner, ProgressBar } from 'react-bootstrap';
 import { useEffect, useState } from 'react';
 import { documentService } from '../../services/documentService';
 import { tenantService, type TenantRecord } from '../../services/tenantService';
@@ -51,6 +51,12 @@ const EDITransform = () => {
   const [error, setError] = useState('');
   const [tenantOptions, setTenantOptions] = useState<TenantRecord[]>([]);
   const [transactionTypes, setTransactionTypes] = useState<TransactionTypeRecord[]>([]);
+  const [submissionState, setSubmissionState] = useState<{ status: 'idle' | 'submitted'; transformationId: string; documentStatus: string; message: string }>({
+    status: 'idle',
+    transformationId: '',
+    documentStatus: '',
+    message: '',
+  });
 
   useEffect(() => {
     void loadOptions();
@@ -107,6 +113,7 @@ const EDITransform = () => {
     setLoading(true);
     setError('');
     setResult('');
+    setSubmissionState({ status: 'idle', transformationId: '', documentStatus: '', message: '' });
 
     try {
       const content = await file.text();
@@ -123,10 +130,18 @@ const EDITransform = () => {
       };
 
       const uploadedDocument = await documentService.upload(documentPayload, file);
-      /*
-      const xml = buildXmlFromEdi(content, selectedTenant, selectedType, uploadedDocument.name || file.name, uploadedDocument.id || 'pending');
-      setResult(xml);
-      */
+      const documentId = uploadedDocument.id || uploadedDocument.name || 'pending';
+      const jobStatus = await documentService.getTransformationJobStatus(documentId);
+      const latestStatus = jobStatus?.status || uploadedDocument.status || 'Indexed';
+      // const xml = buildXmlFromEdi(content, selectedTenant, selectedType, uploadedDocument.name || file.name, documentId);
+
+      // setResult(xml);
+      setSubmissionState({
+        status: 'submitted',
+        transformationId: documentId,
+        documentStatus: latestStatus,
+        message: 'The upload request was accepted and the transformation workflow has started.',
+      });
     } catch (err) {
       console.error(err);
       setError('Unable to upload the file to the document API and transform it.');
@@ -148,92 +163,118 @@ const EDITransform = () => {
   };
 
   return (
-    <div>
-      <h2 className="mb-4">🔄 EDI Transformation</h2>
+    <div className="py-3">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-4">
+        <div>
+          <h2 className="mb-1">🔄 EDI Transformation</h2>
+          <p className="text-muted mb-0">Upload an EDI text file and view the returned submission status from the document API.</p>
+        </div>
+        <div className="text-md-end">
+          <Badge bg={submissionState.status === 'submitted' ? 'success' : 'secondary'} pill className="mb-1">
+            {submissionState.status === 'submitted' ? 'Submitted request' : 'Ready to submit'}
+          </Badge>
+          <div className="text-muted" style={{ fontSize: '0.85rem' }}>Quickly transform and preview XML</div>
+        </div>
+      </div>
 
-      <Row className="g-3">
-        <Col lg={6}>
-          <Card className="border-0 shadow-sm">
-            <Card.Header className="bg-light border-bottom">
-              <Card.Title className="mb-0">Transform EDI to XML</Card.Title>
-            </Card.Header>
+      <Row className="g-4">
+        <Col lg={5}>
+          <Card className="border-0 shadow-sm h-100">
             <Card.Body>
               {error && <Alert variant="danger">{error}</Alert>}
-              <Form>
-                <Form.Group className="mb-3">
-                  <Form.Label>Select Tenant</Form.Label>
-                  <Form.Select
-                    value={selectedTenant}
-                    onChange={(e) => setSelectedTenant(e.target.value)}
-                  >
+
+              <ListGroup className="mb-3">
+                <ListGroup.Item active className="d-flex justify-content-between align-items-center">
+                  <div>1. Select Options</div>
+                  <Badge bg="light" text="dark">{selectedTenant || '—'}</Badge>
+                </ListGroup.Item>
+
+                <ListGroup.Item className="d-flex justify-content-between align-items-center">
+                  <div>Tenant</div>
+                  <Form.Select value={selectedTenant} onChange={(e) => setSelectedTenant(e.target.value)} style={{ width: '58%' }}>
                     <option value="">Choose Tenant</option>
                     {tenantOptions.map((tenant) => (
-                      <option key={tenant.id} value={tenant.name}>
-                        {tenant.code} - {tenant.name}
-                      </option>
+                      <option key={tenant.id} value={tenant.name}>{tenant.code} - {tenant.name}</option>
                     ))}
                   </Form.Select>
-                </Form.Group>
+                </ListGroup.Item>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Transaction Type</Form.Label>
-                  <Form.Select
-                    value={selectedType}
-                    onChange={(e) => setSelectedType(e.target.value)}
-                  >
+                <ListGroup.Item className="d-flex justify-content-between align-items-center">
+                  <div>Transaction Type</div>
+                  <Form.Select value={selectedType} onChange={(e) => setSelectedType(e.target.value)} style={{ width: '58%' }}>
                     <option value="">Choose Type</option>
                     {transactionTypes.map((transactionType) => (
-                      <option key={transactionType.id} value={transactionType.code}>
-                        {transactionType.code} - {transactionType.name || 'Transaction'}
-                      </option>
+                      <option key={transactionType.id} value={transactionType.code}>{transactionType.code} - {transactionType.name || 'Transaction'}</option>
                     ))}
                   </Form.Select>
-                </Form.Group>
+                </ListGroup.Item>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Choose EDI File</Form.Label>
-                  <Form.Control
-                    type="file"
-                    accept=".txt"
-                    onChange={handleFileChange}
-                  />
-                  <Form.Text className="text-muted">Upload a .txt file to send it to the document API.</Form.Text>
-                </Form.Group>
+                <ListGroup.Item className="d-flex justify-content-between align-items-center">
+                  <div>2. Choose File</div>
+                  <div style={{ width: '58%' }}>
+                    <Form.Control type="file" accept=".txt" onChange={handleFileChange} />
+                    <div className="text-muted mt-1" style={{ fontSize: '0.8rem' }}>{file?.name || 'No file selected'}</div>
+                  </div>
+                </ListGroup.Item>
 
-                <Button
-                  variant="primary"
-                  onClick={handleTransform}
-                  disabled={!selectedTenant || !selectedType || !file || loading}
-                  className="w-100"
-                >
-                  {loading ? 'Transforming...' : '🚀 Transform'}
-                </Button>
-              </Form>
+                <ListGroup.Item className="d-flex justify-content-between align-items-center">
+                  <div>3. Transform</div>
+                  <div style={{ width: '58%' }}>
+                    <Button variant="primary" onClick={handleTransform} disabled={!selectedTenant || !selectedType || !file || loading} className="w-100">
+                      {loading ? (<><Spinner animation="border" size="sm" /> <span className="ms-2">Transforming…</span></>) : '🚀 Transform'}
+                    </Button>
+                  </div>
+                </ListGroup.Item>
+              </ListGroup>
+
+              <div>
+                <div className="mb-2"><strong>Progress</strong></div>
+                <ProgressBar now={submissionState.status === 'submitted' ? 100 : loading ? 60 : 0} label={submissionState.status === 'submitted' ? 'Done' : loading ? 'Processing' : 'Idle'} />
+              </div>
             </Card.Body>
           </Card>
         </Col>
 
-        {result && (
-          <Col lg={6}>
+        <Col lg={7}>
+          <div className="d-flex flex-column gap-3">
             <Card className="border-0 shadow-sm">
-              <Card.Header className="bg-light border-bottom">
-                <div className="d-flex justify-content-between align-items-center">
-                  <Card.Title className="mb-0">Generated XML</Card.Title>
-                  <div>
-                    <Button variant="outline-primary" size="sm" className="me-2" onClick={handleDownload}>
-                      📥 Download
-                    </Button>
-                  </div>
+              <Card.Header className="bg-white border-bottom d-flex justify-content-between align-items-center">
+                <div>
+                  <Card.Title className="mb-0">Submission Status</Card.Title>
+                  <Card.Text className="text-muted mb-0">Results returned by the document API</Card.Text>
+                </div>
+                <div>
+                  {submissionState.status === 'submitted' ? <Badge bg="success">Submitted</Badge> : <Badge bg="secondary">Idle</Badge>}
                 </div>
               </Card.Header>
               <Card.Body>
-                <pre style={{ maxHeight: '400px', overflow: 'auto', fontSize: '0.85rem' }}>
-                  {result}
-                </pre>
+                {submissionState.status === 'submitted' ? (
+                  <div className="d-flex flex-column gap-2">
+                    <div><strong>Transformation ID:</strong> <span className="text-monospace">{submissionState.transformationId}</span></div>
+                    <div><strong>Status:</strong> {submissionState.documentStatus}</div>
+                    <div className="text-muted">{submissionState.message}</div>
+                  </div>
+                ) : (
+                  <div className="text-muted">No submission yet. Use the panel on the left to start a transformation.</div>
+                )}
               </Card.Body>
             </Card>
-          </Col>
-        )}
+
+            {result && (
+              <Card className="border-0 shadow-sm">
+                <Card.Header className="bg-white border-bottom d-flex justify-content-between align-items-center">
+                  <Card.Title className="mb-0">Generated XML Preview</Card.Title>
+                  <div>
+                    <Button variant="outline-primary" size="sm" onClick={handleDownload}>📥 Download</Button>
+                  </div>
+                </Card.Header>
+                <Card.Body>
+                  <pre style={{ maxHeight: '420px', overflow: 'auto', fontSize: '0.85rem', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{result}</pre>
+                </Card.Body>
+              </Card>
+            )}
+          </div>
+        </Col>
       </Row>
     </div>
   );
