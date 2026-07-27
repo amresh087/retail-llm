@@ -1,4 +1,4 @@
-import { Card, Button, Row, Col, Form, Alert, Badge, ListGroup, Spinner, ProgressBar } from 'react-bootstrap';
+import { Card, Button, Row, Col, Form, Alert, Badge, Spinner, ProgressBar } from 'react-bootstrap';
 import { useEffect, useState } from 'react';
 import { documentService } from '../../services/documentService';
 import { tenantService, type TenantRecord } from '../../services/tenantService';
@@ -11,15 +11,6 @@ type SubmissionState = {
   message: string;
   createdAt: string;
   updatedAt: string;
-};
-
-type SubmissionHistoryItem = {
-  id: string;
-  name: string;
-  tenant: string;
-  transactionTypeCode: string;
-  status: string;
-  documentId: string;
 };
 
 const EDITransform = () => {
@@ -40,11 +31,9 @@ const EDITransform = () => {
     createdAt: '',
     updatedAt: '',
   });
-  const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryItem[]>([]);
 
   useEffect(() => {
     void loadOptions();
-    void loadSubmissionHistory();
   }, []);
 
   useEffect(() => {
@@ -52,7 +41,7 @@ const EDITransform = () => {
       return;
     }
 
-    const shouldAutoPoll = /pending|processing|running|queued|submitted/i.test(submissionState.documentStatus);
+    const shouldAutoPoll = /pending|processing|running|queued|submitted|edi_text_to_edi_xml|edi_xml_to_idoc_xml/i.test(submissionState.documentStatus);
     if (!shouldAutoPoll) {
       return;
     }
@@ -86,35 +75,6 @@ const EDITransform = () => {
     }
   };
 
-  const loadSubmissionHistory = async () => {
-    try {
-      const documents = await documentService.getAll();
-      const ediSubmissions = await Promise.all(
-        documents
-          .filter((document) => {
-            const type = (document.type || '').toUpperCase();
-            const name = (document.name || '').toLowerCase();
-            return document.mappingType === 'edi-to-xml' || type === 'EDI' || type === 'TXT' || name.endsWith('.edi') || name.endsWith('.txt');
-          })
-          .slice(0, 8)
-          .map(async (document) => {
-            const jobStatus = document.id ? await documentService.getTransformationJobStatus(document.id) : null;
-            return {
-              id: document.id || document.name,
-              name: document.name,
-              tenant: document.tenant,
-              transactionTypeCode: document.transactionTypeCode || 'N/A',
-              status: jobStatus?.status || document.status || 'Indexed',
-              documentId: document.id,
-            };
-          })
-      );
-
-      setSubmissionHistory(ediSubmissions);
-    } catch (err) {
-      console.error('Unable to load EDI submission history', err);
-    }
-  };
 
   const updateJobStatus = async (status: string, payload?: string) => {
     if (!submissionState.transformationId) {
@@ -161,7 +121,6 @@ const EDITransform = () => {
         updatedAt: jobStatus?.updatedAt || new Date().toISOString(),
       }));
       await updateJobStatus(latestStatus, nextMessage);
-      await loadSubmissionHistory();
     } catch (err) {
       console.error('Unable to refresh workflow status', err);
       setError('Unable to refresh the workflow status right now.');
@@ -231,7 +190,6 @@ const EDITransform = () => {
         updatedAt: jobStatus?.updatedAt || new Date().toISOString(),
       });
       await updateJobStatus(latestStatus, submittedMessage);
-      await loadSubmissionHistory();
     } catch (err) {
       console.error(err);
       setError('Unable to upload the file to the document API and transform it.');
@@ -252,20 +210,6 @@ const EDITransform = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleDeleteSubmission = async (documentId: string) => {
-    if (!documentId) return;
-
-    try {
-      await documentService.remove(documentId);
-      setSubmissionHistory((previous) => previous.filter((submission) => submission.documentId !== documentId && submission.id !== documentId));
-      if (submissionState.transformationId === documentId) {
-        setSubmissionState({ status: 'idle', transformationId: '', documentStatus: '', message: '', createdAt: '', updatedAt: '' });
-      }
-    } catch (err) {
-      console.error('Unable to delete submission', err);
-      setError('Unable to delete this submission right now.');
-    }
-  };
 
   const getProgressValue = () => {
     if (loading) return 60;
@@ -289,7 +233,10 @@ const EDITransform = () => {
     if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
       return 'success';
     }
-    if (normalized.includes('pending') || normalized.includes('processing') || normalized.includes('queue') || normalized.includes('running')) {
+    if (normalized.includes('fail') || normalized.includes('error')) {
+      return 'danger';
+    }
+    if (normalized.includes('edi_text_to_edi_xml') || normalized.includes('edi_xml_to_idoc_xml') || normalized.includes('processing') || normalized.includes('running') || normalized.includes('queue') || normalized.includes('pending')) {
       return 'warning';
     }
     return 'secondary';
@@ -300,11 +247,20 @@ const EDITransform = () => {
     if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
       return 'Completed';
     }
-    if (normalized.includes('pending')) {
-      return 'Pending';
+    if (normalized.includes('fail') || normalized.includes('error')) {
+      return 'Failed';
+    }
+    if (normalized.includes('edi_text_to_edi_xml')) {
+      return 'EDI text → EDI XML';
+    }
+    if (normalized.includes('edi_xml_to_idoc_xml')) {
+      return 'EDI XML → IDOC XML';
     }
     if (normalized.includes('processing') || normalized.includes('running') || normalized.includes('queue')) {
       return 'Processing';
+    }
+    if (normalized.includes('pending')) {
+      return 'Pending';
     }
     return 'Submitted';
   };
@@ -352,12 +308,10 @@ const EDITransform = () => {
     if (normalized.includes('fail') || normalized.includes('error')) {
       return 4;
     }
-    if (normalized.includes('process') || normalized.includes('running') || normalized.includes('queue') || normalized.includes('pending')) {
-      const startedAt = parseDate(submissionState.createdAt);
-      const updatedAt = parseDate(submissionState.updatedAt);
-      if (startedAt && updatedAt && updatedAt.getTime() - startedAt.getTime() > 30000) {
-        return 3;
-      }
+    if (normalized.includes('edi_xml_to_idoc_xml')) {
+      return 3;
+    }
+    if (normalized.includes('edi_text_to_edi_xml')) {
       return 2;
     }
     return 1;
@@ -594,50 +548,6 @@ const EDITransform = () => {
               </Card.Body>
             </Card>
 
-            <Card className="border-0 shadow-sm rounded-4">
-              <Card.Header className="bg-white border-bottom px-4 py-3">
-                <Card.Title className="mb-0">Submitted EDI Transactions</Card.Title>
-              </Card.Header>
-              <Card.Body className="p-0">
-                {submissionHistory.length ? (
-                  <ListGroup variant="flush">
-                    {submissionHistory.map((submission) => {
-                      const normalizedStatus = (submission.status || 'Indexed').toLowerCase();
-                      const badgeVariant = normalizedStatus.includes('complete') || normalizedStatus.includes('success') || normalizedStatus.includes('done')
-                        ? 'success'
-                        : normalizedStatus.includes('pending') || normalizedStatus.includes('processing') || normalizedStatus.includes('queue') || normalizedStatus.includes('running')
-                          ? 'warning'
-                          : 'secondary';
-                      const badgeLabel = normalizedStatus.includes('complete') || normalizedStatus.includes('success') || normalizedStatus.includes('done')
-                        ? 'Completed'
-                        : normalizedStatus.includes('pending')
-                          ? 'Pending'
-                          : normalizedStatus.includes('processing') || normalizedStatus.includes('running') || normalizedStatus.includes('queue')
-                            ? 'Processing'
-                            : 'Indexed';
-
-                      return (
-                        <ListGroup.Item key={submission.id} className="d-flex justify-content-between align-items-start gap-3 px-4 py-3">
-                          <div>
-                            <div className="fw-semibold">{submission.name}</div>
-                            <div className="text-muted small">{submission.tenant} • {submission.transactionTypeCode}</div>
-                            <div className="text-muted small">ID: {submission.documentId || submission.id}</div>
-                          </div>
-                          <div className="d-flex align-items-center gap-2">
-                            <Badge bg={badgeVariant}>{badgeLabel}</Badge>
-                            <Button variant="outline-danger" size="sm" onClick={() => void handleDeleteSubmission(submission.documentId || submission.id)}>
-                              Delete
-                            </Button>
-                          </div>
-                        </ListGroup.Item>
-                      );
-                    })}
-                  </ListGroup>
-                ) : (
-                  <div className="p-3 text-muted">No submitted EDI transactions have been recorded yet.</div>
-                )}
-              </Card.Body>
-            </Card>
 
             {result && (
               <Card className="border-0 shadow-sm">
