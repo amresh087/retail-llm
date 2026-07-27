@@ -37,7 +37,7 @@ interface DocumentApiResponse {
   objectName?: string;
 }
 
-interface TransformationJobStatus {
+export interface TransformationJobStatus {
   id?: string;
   documentId?: string;
   jobName?: string;
@@ -45,6 +45,12 @@ interface TransformationJobStatus {
   payload?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+interface UpdateTransformationJobPayload {
+  documentId?: string;
+  jobName?: string;
+  payload?: string;
 }
 
 const normalizeDocument = (doc: DocumentApiResponse): DocumentRecord => ({
@@ -106,6 +112,14 @@ export const documentService = {
       }
       throw error;
     }
+  },
+
+  updateTransformationJobStatus: async (jobId: string, status: string, payload?: string): Promise<TransformationJobStatus | null> => {
+    const response = await api.put(`/documents/jobs/${jobId}`, {
+      payload: payload ?? status,
+      jobName: 'edi-transformation',
+    });
+    return response.data as TransformationJobStatus;
   },
 
   remove: async (id: string): Promise<void> => {

@@ -9,6 +9,7 @@ type SubmissionState = {
   transformationId: string;
   documentStatus: string;
   message: string;
+  createdAt: string;
   updatedAt: string;
 };
 
@@ -36,6 +37,7 @@ const EDITransform = () => {
     transformationId: '',
     documentStatus: '',
     message: '',
+    createdAt: '',
     updatedAt: '',
   });
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryItem[]>([]);
@@ -114,6 +116,24 @@ const EDITransform = () => {
     }
   };
 
+  const updateJobStatus = async (status: string, payload?: string) => {
+    if (!submissionState.transformationId) {
+      return null;
+    }
+
+    try {
+      const jobStatus = await documentService.getTransformationJobStatus(submissionState.transformationId);
+      if (!jobStatus?.id) {
+        return null;
+      }
+
+      return documentService.updateTransformationJobStatus(jobStatus.id, status, payload ?? status);
+    } catch (err) {
+      console.error('Unable to update transformation job status', err);
+      return null;
+    }
+  };
+
   const refreshSubmissionStatus = async (showLoading = true) => {
     if (!submissionState.transformationId) {
       return;
@@ -137,8 +157,10 @@ const EDITransform = () => {
         ...previous,
         documentStatus: latestStatus,
         message: nextMessage,
-        updatedAt: new Date().toLocaleString(),
+        createdAt: jobStatus?.createdAt || previous.createdAt || new Date().toISOString(),
+        updatedAt: jobStatus?.updatedAt || new Date().toISOString(),
       }));
+      await updateJobStatus(latestStatus, nextMessage);
       await loadSubmissionHistory();
     } catch (err) {
       console.error('Unable to refresh workflow status', err);
@@ -179,7 +201,7 @@ const EDITransform = () => {
     setLoading(true);
     setError('');
     setResult('');
-    setSubmissionState({ status: 'idle', transformationId: '', documentStatus: '', message: '', updatedAt: '' });
+    setSubmissionState({ status: 'idle', transformationId: '', documentStatus: '', message: '', createdAt: '', updatedAt: '' });
 
     try {
       const extension = file.name.split('.').pop()?.toLowerCase() ?? 'txt';
@@ -199,13 +221,16 @@ const EDITransform = () => {
       const jobStatus = await documentService.getTransformationJobStatus(documentId);
       const latestStatus = jobStatus?.status || uploadedDocument.status || 'Indexed';
 
+      const submittedMessage = 'The upload request was accepted and the transformation workflow has started.';
       setSubmissionState({
         status: 'submitted',
         transformationId: documentId,
         documentStatus: latestStatus,
-        message: 'The upload request was accepted and the transformation workflow has started.',
-        updatedAt: new Date().toLocaleString(),
+        message: submittedMessage,
+        createdAt: jobStatus?.createdAt || new Date().toISOString(),
+        updatedAt: jobStatus?.updatedAt || new Date().toISOString(),
       });
+      await updateJobStatus(latestStatus, submittedMessage);
       await loadSubmissionHistory();
     } catch (err) {
       console.error(err);
@@ -234,7 +259,7 @@ const EDITransform = () => {
       await documentService.remove(documentId);
       setSubmissionHistory((previous) => previous.filter((submission) => submission.documentId !== documentId && submission.id !== documentId));
       if (submissionState.transformationId === documentId) {
-        setSubmissionState({ status: 'idle', transformationId: '', documentStatus: '', message: '', updatedAt: '' });
+        setSubmissionState({ status: 'idle', transformationId: '', documentStatus: '', message: '', createdAt: '', updatedAt: '' });
       }
     } catch (err) {
       console.error('Unable to delete submission', err);
@@ -284,24 +309,102 @@ const EDITransform = () => {
     return 'Submitted';
   };
 
+  const parseDate = (value?: string) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const formatDateTime = (value?: string) => {
+    const parsed = parseDate(value);
+    if (!parsed) return '—';
+    return new Intl.DateTimeFormat('en', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(parsed);
+  };
+
+  const formatDuration = (start?: string, end?: string) => {
+    const startDate = parseDate(start);
+    const endDate = parseDate(end);
+    if (!startDate || !endDate) return '—';
+
+    const diffMs = Math.max(0, endDate.getTime() - startDate.getTime());
+    const totalSeconds = Math.floor(diffMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  };
+
   const getWorkflowStage = (status: string) => {
     const normalized = status.toLowerCase();
     if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
-      return 3;
+      return 4;
+    }
+    if (normalized.includes('fail') || normalized.includes('error')) {
+      return 4;
     }
     if (normalized.includes('process') || normalized.includes('running') || normalized.includes('queue') || normalized.includes('pending')) {
+      const startedAt = parseDate(submissionState.createdAt);
+      const updatedAt = parseDate(submissionState.updatedAt);
+      if (startedAt && updatedAt && updatedAt.getTime() - startedAt.getTime() > 30000) {
+        return 3;
+      }
       return 2;
     }
     return 1;
   };
 
-  const workflowSteps = [
-    { title: 'Submission', caption: 'Request accepted', key: 'submitted' },
-    { title: 'Processing', caption: 'Transformation in progress', key: 'processing' },
-    { title: 'Results', caption: 'XML returned', key: 'results' },
-  ];
-
   const workflowStage = getWorkflowStage(submissionState.documentStatus || 'submitted');
+  const workflowSteps = (() => {
+    const isCompleted = /complete|success|done/.test((submissionState.documentStatus || '').toLowerCase());
+    const isFailed = /fail|error/.test((submissionState.documentStatus || '').toLowerCase());
+    const isProcessing = /process|running|queue|pending/.test((submissionState.documentStatus || '').toLowerCase());
+    const currentStartedAt = parseDate(submissionState.createdAt) ?? parseDate(submissionState.updatedAt) ?? new Date();
+    const lastUpdatedAt = parseDate(submissionState.updatedAt) ?? new Date();
+    const stage2Start = currentStartedAt;
+    const stage3Start = workflowStage >= 3 ? new Date(currentStartedAt.getTime() + 30000) : null;
+    const finalStart = isCompleted || isFailed ? lastUpdatedAt : null;
+
+    return [
+      {
+        title: '1. Submitted',
+        caption: 'Request accepted',
+        startedAt: currentStartedAt,
+        duration: formatDuration(submissionState.createdAt || submissionState.updatedAt, workflowStage >= 2 ? (submissionState.updatedAt || submissionState.createdAt) : undefined),
+        status: workflowStage === 1 ? 'active' : 'completed',
+      },
+      {
+        title: '2. EDI text → EDI XML',
+        caption: 'Normalize the EDI payload and generate XML',
+        startedAt: stage2Start,
+        duration: formatDuration(stage2Start.toISOString(), workflowStage >= 3 ? (stage3Start?.toISOString() || lastUpdatedAt.toISOString()) : (isCompleted || isFailed ? lastUpdatedAt.toISOString() : undefined)),
+        status: workflowStage === 2 ? 'active' : workflowStage > 2 ? 'completed' : 'pending',
+      },
+      {
+        title: '3. EDI XML → IDOC XML',
+        caption: 'Transform the XML into the final IDOC structure',
+        startedAt: stage3Start,
+        duration: formatDuration(stage3Start?.toISOString(), finalStart?.toISOString()),
+        status: workflowStage === 3 ? 'active' : workflowStage === 4 ? 'completed' : 'pending',
+      },
+      {
+        title: '4. Completed / Failed',
+        caption: isFailed ? 'The workflow ended with an error' : isCompleted ? 'The workflow completed successfully' : 'Waiting for the final result',
+        startedAt: finalStart,
+        duration: '—',
+        status: isFailed ? 'failed' : isCompleted ? 'completed' : 'pending',
+      },
+    ];
+  })();
 
   return (
     <div className="py-3">
@@ -446,25 +549,33 @@ const EDITransform = () => {
 
                         <div className="d-flex flex-column gap-3">
                           {workflowSteps.map((step, index) => {
-                            const isCurrent = workflowStage === index + 1;
-                            const isCompleted = workflowStage > index + 1;
-                            const isPending = !isCompleted && !isCurrent;
+                            const isActive = step.status === 'active';
+                            const isCompleted = step.status === 'completed';
+                            const isFailed = step.status === 'failed';
+                            const isPending = step.status === 'pending';
 
                             return (
-                              <div key={step.key} className="d-flex align-items-start gap-3">
+                              <div key={`${step.title}-${index}`} className="d-flex align-items-start gap-3">
                                 <div className="d-flex flex-column align-items-center" style={{ minWidth: 36 }}>
-                                  <div className="rounded-circle d-inline-flex align-items-center justify-content-center" style={{ width: 36, height: 36, backgroundColor: isCompleted ? '#198754' : isCurrent ? '#0d6efd' : '#e9ecef', color: isCompleted || isCurrent ? '#fff' : '#6c757d', fontSize: '0.95rem' }}>
-                                    {isCompleted ? '✓' : index + 1}
+                                  <div className="rounded-circle d-inline-flex align-items-center justify-content-center" style={{ width: 36, height: 36, backgroundColor: isCompleted ? '#198754' : isFailed ? '#dc3545' : isActive ? '#0d6efd' : '#e9ecef', color: isCompleted || isFailed || isActive ? '#fff' : '#6c757d', fontSize: '0.95rem' }}>
+                                    {isCompleted ? '✓' : isFailed ? '✕' : index + 1}
                                   </div>
                                   {index < workflowSteps.length - 1 && (
-                                    <div className="mt-2" style={{ width: 2, height: 28, backgroundColor: isCompleted ? '#198754' : isPending ? '#e9ecef' : '#0d6efd' }} />
+                                    <div className="mt-2" style={{ width: 2, height: 28, backgroundColor: isCompleted ? '#198754' : isFailed ? '#dc3545' : isActive ? '#0d6efd' : '#e9ecef' }} />
                                   )}
                                 </div>
                                 <div className="flex-grow-1 py-1">
                                   <div className="fw-semibold">{step.title}</div>
                                   <div className="text-muted small">{step.caption}</div>
-                                  {isCurrent && (
-                                    <div className="mt-2 small fw-semibold text-primary">{getStatusLabel(submissionState.documentStatus || 'submitted').toUpperCase()}</div>
+                                  <div className="mt-2 small text-muted">
+                                    <div>Started: {formatDateTime(step.startedAt?.toISOString())}</div>
+                                    <div>Duration: {step.duration}</div>
+                                  </div>
+                                  {isActive && (
+                                    <div className="mt-2 small fw-semibold text-primary">CURRENT STAGE</div>
+                                  )}
+                                  {isPending && (
+                                    <div className="mt-2 small text-muted">PENDING</div>
                                   )}
                                 </div>
                               </div>

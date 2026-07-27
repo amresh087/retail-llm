@@ -11,6 +11,7 @@ export interface User {
   roles: string[];
   token: string;
   refreshToken?: string | null;
+  tenantId?: string | number | null;
 }
 
 export interface AuthContextType {

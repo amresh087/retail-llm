@@ -19,6 +19,7 @@ import "./Products.css";
 interface Category {
   id: number;
   category: string;
+  categoryHi?: string;
   isActive: boolean;
 }
 
@@ -180,14 +181,18 @@ const Products: React.FC = () => {
   /* 🔎 Filter logic */
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchSearch =
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.nameHi?.toLowerCase().includes(search.toLowerCase()) ||
-        p.category.toLowerCase().includes(search.toLowerCase()) ||
-        p.categoryHi?.toLowerCase().includes(search.toLowerCase()) ||
-        p.brandName.toLowerCase().includes(search.toLowerCase()) ||
-        p.brandNameHi?.toLowerCase().includes(search.toLowerCase()) ||
-        p.sku.toLowerCase().includes(search.toLowerCase());
+      const normalizedSearch = search.toLowerCase();
+      const matchSearch = [
+        p.name,
+        p.nameHi,
+        p.category,
+        p.categoryHi,
+        p.brandName,
+        p.brandNameHi,
+        p.sku,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(normalizedSearch));
 
       const matchCategory = !filterCategory || p.category === filterCategory;
       const matchBrand = !filterBrand || p.brandId?.toString() === filterBrand;

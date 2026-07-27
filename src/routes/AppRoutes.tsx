@@ -18,12 +18,6 @@ import Profile from '../pages/admin/Profile';
 import JobsList from '../pages/admin/JobsList';
 import LogsList from '../pages/admin/LogsList';
 import Reports from '../pages/admin/Reports';
-import FromPurchase from '../pages/admin/FromPurchase';
-import AdminProduct from '../pages/admin/AdminProduct';
-import AdminInventory from '../pages/admin/AdminInventory';
-import AdminCategory from '../pages/admin/AdminCategory';
-import AdminBrand from '../pages/admin/AdminBrand';
-import AdminRewards from '../pages/admin/AdminRewards';
 
 import ShopkeeperDashboard from '../pages/shopkeeper/ShopkeeperDashboard';
 import Products from '../pages/shopkeeper/Products';

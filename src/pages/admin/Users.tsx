@@ -22,6 +22,17 @@ import {
 
 import type { UserDto } from "../../services/userService";
 
+const normalizeUserDto = (user: Partial<UserDto> | null | undefined): UserDto => {
+  const safeUser = user ?? {};
+  return {
+    ...safeUser,
+    username: safeUser.username ?? "",
+    role: safeUser.role ?? "ADMIN",
+    email: safeUser.email ?? "",
+    password: safeUser.password ?? "",
+  };
+};
+
 
 const Users: React.FC = () => {
   const { t } = useTranslation();
@@ -46,7 +57,7 @@ const Users: React.FC = () => {
     try {
       setLoading(true);
       const res = await getUsers();
-      setUsers(res.data);
+      setUsers((res.data ?? []).map(normalizeUserDto));
     } catch {
       setError("Failed to load users");
     } finally {
@@ -76,10 +87,18 @@ const Users: React.FC = () => {
   // 🔹 Save (create/update)
   const handleSave = async () => {
     try {
+      const payload: UserDto = {
+        ...formData,
+        username: formData.username ?? "",
+        role: formData.role ?? "ADMIN",
+        email: formData.email ?? "",
+        password: formData.password ?? "",
+      };
+
       if (editingUser?.id) {
-        await updateUser(editingUser.id, formData);
+        await updateUser(editingUser.id, payload);
       } else {
-        await createUser(formData);
+        await createUser(payload);
       }
       setShowModal(false);
       loadUsers();

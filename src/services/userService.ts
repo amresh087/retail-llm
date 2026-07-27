@@ -11,7 +11,7 @@ export interface UserRecord {
   firstName?: string;
   lastName?: string;
   password?: string;
-  tenantId?: number;
+  tenantId?: number | null;
   roleId?: number;
   active?: boolean;
 }
@@ -31,7 +31,7 @@ interface UserPayload {
   active?: boolean;
   lastName?: string | null;
   password?: string;
-  tenantId?: number;
+  tenantId?: number | null;
   roleId?: number;
 }
 
@@ -61,10 +61,10 @@ export const userService = {
   },
 
   create: async (payload: {
-    username: string;
-    email: string;
-    password: string;
-    tenantId?: number;
+    username?: string;
+    email?: string;
+    password?: string;
+    tenantId?: number | null;
     tenantCode?: string;
     roleId?: number;
     status?: string;
@@ -80,10 +80,10 @@ export const userService = {
   update: async (
     userId: number,
     payload: {
-      username: string;
-      email: string;
-      password: string;
-      tenantId?: number;
+      username?: string;
+      email?: string;
+      password?: string;
+      tenantId?: number | null;
       tenantCode?: string;
       roleId?: number;
       status?: string;
@@ -101,3 +101,28 @@ export const userService = {
     await api.delete(`${USERS_ENDPOINT}/${userId}`);
   },
 };
+
+export const getUsers = async (): Promise<{ data: UserRecord[] }> => ({ data: await userService.getAll() });
+
+export const createUser = async (payload: Parameters<typeof userService.create>[0]) => userService.create(payload);
+
+export const updateUser = async (userId: number, payload: Parameters<typeof userService.create>[0]) => userService.update(userId, payload);
+
+export const deleteUser = async (userId: number) => userService.remove(userId);
+
+export interface UserDto {
+  id?: number;
+  username: string;
+  role: string;
+  email: string;
+  password?: string;
+  active?: boolean;
+  tenantId?: number | null;
+  tenantCode?: string;
+  roleId?: number;
+  status?: string;
+  enabled?: boolean;
+  accountNonLocked?: boolean;
+  credentialsNonExpired?: boolean;
+  accountNonExpired?: boolean;
+}
