@@ -1,29 +1,143 @@
-import { Container, Row, Col, Card } from 'react-bootstrap';
-import { useContext } from 'react';
+import { Row, Col, Card } from 'react-bootstrap';
+import { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../../auth/AuthContext';
+import api from '../../services/api';
+import { tenantService } from '../../services/tenantService';
+import { userService } from '../../services/userService';
+import { documentService } from '../../services/documentService';
 import './AdminDashboard.css';
+
+type StatItem = { label: string; value: string; icon: string; gradient: string };
+type ChartItem = { title: string; value: string; trend: string };
+
+const formatNumber = (value: number) => new Intl.NumberFormat('en-IN').format(value);
+
+const defaultStats: StatItem[] = [
+  { label: 'Total Tenants', value: '0', icon: '🏢', gradient: 'gradient-blue' },
+  { label: 'Total Users', value: '0', icon: '👥', gradient: 'gradient-green' },
+  { label: 'Total Documents', value: '0', icon: '📄', gradient: 'gradient-purple' },
+  { label: 'EDI Jobs', value: '0', icon: '🔄', gradient: 'gradient-orange' },
+  { label: 'Indexed Docs', value: '0', icon: '✓', gradient: 'gradient-teal' },
+  { label: 'Failed Jobs', value: '0', icon: '❌', gradient: 'gradient-red' },
+  { label: 'Storage Used', value: '0 GB', icon: '💾', gradient: 'gradient-pink' },
+  { label: 'Active Users', value: '0', icon: '🟢', gradient: 'gradient-cyan' },
+];
+
+const defaultChartData: ChartItem[] = [
+  { title: 'Documents Uploaded', value: '0', trend: '+0%' },
+  { title: 'EDI Processed', value: '0', trend: '+0%' },
+  { title: 'Success Rate', value: '0%', trend: '+0%' },
+  { title: 'Storage Usage', value: '0 GB', trend: '+0%' },
+];
+
+const getActiveUserCount = (users: Array<{ status?: string; active?: boolean }>) =>
+  users.filter((user) => {
+    const status = (user.status || '').toLowerCase();
+    return user.active !== false && !['inactive', 'disabled', 'blocked', 'suspended'].includes(status);
+  }).length;
+
+const buildDashboardData = (payload?: any) => {
+  const totalTenants = payload?.totalTenants ?? payload?.tenantsCount ?? 0;
+  const totalUsers = payload?.totalUsers ?? payload?.usersCount ?? 0;
+  const totalDocuments = payload?.totalDocuments ?? payload?.documentsCount ?? 0;
+  const ediJobs = payload?.ediJobs ?? payload?.totalJobs ?? totalDocuments;
+  const indexedDocs = payload?.indexedDocs ?? payload?.indexedDocuments ?? 0;
+  const failedJobs = payload?.failedJobs ?? payload?.failedDocuments ?? 0;
+  const activeUsers = payload?.activeUsers ?? 0;
+  const storageUsedGb = payload?.storageUsedGb ?? payload?.storageUsed ?? 0;
+
+  return {
+    stats: [
+      { label: 'Total Tenants', value: formatNumber(totalTenants), icon: '🏢', gradient: 'gradient-blue' },
+      { label: 'Total Users', value: formatNumber(totalUsers), icon: '👥', gradient: 'gradient-green' },
+      { label: 'Total Documents', value: formatNumber(totalDocuments), icon: '📄', gradient: 'gradient-purple' },
+      { label: 'EDI Jobs', value: formatNumber(ediJobs), icon: '🔄', gradient: 'gradient-orange' },
+      { label: 'Indexed Docs', value: formatNumber(indexedDocs), icon: '✓', gradient: 'gradient-teal' },
+      { label: 'Failed Jobs', value: formatNumber(failedJobs), icon: '❌', gradient: 'gradient-red' },
+      { label: 'Storage Used', value: `${formatNumber(storageUsedGb)} GB`, icon: '💾', gradient: 'gradient-pink' },
+      { label: 'Active Users', value: formatNumber(activeUsers), icon: '🟢', gradient: 'gradient-cyan' },
+    ] as StatItem[],
+    chartData: [
+      { title: 'Documents Uploaded', value: formatNumber(totalDocuments), trend: '+0%' },
+      { title: 'EDI Processed', value: formatNumber(ediJobs), trend: '+0%' },
+      { title: 'Success Rate', value: totalDocuments > 0 ? `${((1 - failedJobs / totalDocuments) * 100).toFixed(1)}%` : '0%', trend: '+0%' },
+      { title: 'Storage Usage', value: `${formatNumber(storageUsedGb)} GB`, trend: '+0%' },
+    ] as ChartItem[],
+  };
+};
 
 const AdminDashboard = () => {
   const auth = useContext(AuthContext);
   const username = auth?.user?.username || 'Admin';
+  const [stats, setStats] = useState<StatItem[]>(defaultStats);
+  const [chartData, setChartData] = useState<ChartItem[]>(defaultChartData);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const stats = [
-    { label: 'Total Tenants', value: '12', icon: '🏢', gradient: 'gradient-blue' },
-    { label: 'Total Users', value: '85', icon: '👥', gradient: 'gradient-green' },
-    { label: 'Total Documents', value: '1,540', icon: '📄', gradient: 'gradient-purple' },
-    { label: 'EDI Jobs', value: '5,245', icon: '🔄', gradient: 'gradient-orange' },
-    { label: 'Indexed Docs', value: '950', icon: '✓', gradient: 'gradient-teal' },
-    { label: 'Failed Jobs', value: '5', icon: '❌', gradient: 'gradient-red' },
-    { label: 'Storage Used', value: '42 GB', icon: '💾', gradient: 'gradient-pink' },
-    { label: 'Active Users', value: '18', icon: '🟢', gradient: 'gradient-cyan' },
-  ];
+  useEffect(() => {
+    let isMounted = true;
 
-  const chartData = [
-    { title: 'Documents Uploaded', value: '1,540', trend: '+12%' },
-    { title: 'EDI Processed', value: '5,245', trend: '+8%' },
-    { title: 'Success Rate', value: '99.8%', trend: '+0.2%' },
-    { title: 'Storage Usage', value: '42 GB', trend: '+5%' },
-  ];
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        try {
+          const response = await api.get('/dashboard/metrics');
+          if (isMounted) {
+            const payload = buildDashboardData(response.data);
+            setStats(payload.stats);
+            setChartData(payload.chartData);
+            return;
+          }
+        } catch {
+          // fall back to existing service endpoints when a dedicated dashboard endpoint is unavailable
+        }
+
+        const [tenants, users, mappingDocuments] = await Promise.all([
+          tenantService.getAll(),
+          userService.getAll(),
+          documentService.getAll('mappingdoc'),
+        ]);
+
+        if (!isMounted) return;
+
+        const activeUsers = getActiveUserCount(users);
+        const indexedDocs = mappingDocuments.filter((doc) => doc.status?.toLowerCase() === 'indexed').length;
+        const failedJobs = mappingDocuments.filter((doc) => /failed|error/i.test(doc.status)).length;
+        const storageUsedGb = Math.max(0, Math.round(mappingDocuments.length / 10));
+        const ediJobs = mappingDocuments.filter((doc) => doc.type?.toLowerCase() === 'xml').length;
+
+        const fallback = buildDashboardData({
+          totalTenants: tenants.length,
+          totalUsers: users.length,
+          totalDocuments: mappingDocuments.length,
+          ediJobs,
+          indexedDocs,
+          failedJobs,
+          activeUsers,
+          storageUsedGb,
+        });
+
+        setStats(fallback.stats);
+        setChartData(fallback.chartData);
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('Failed to load dashboard metrics', err);
+        setError('Unable to load dashboard metrics right now.');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDashboardData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div>
@@ -31,6 +145,8 @@ const AdminDashboard = () => {
         <h2 className="dashboard-title">Dashboard</h2>
         <p className="dashboard-subtitle">Welcome back, <strong>{username}</strong></p>
       </div>
+
+      {error && <div className="alert alert-warning py-2 mb-3">{error}</div>}
 
       {/* Stats Grid */}
       <Row className="g-3 mb-4">
@@ -40,7 +156,7 @@ const AdminDashboard = () => {
               <div className="stat-card-content">
                 <div className="stat-info">
                   <div className="stat-label">{stat.label}</div>
-                  <div className="stat-value">{stat.value}</div>
+                  <div className="stat-value">{loading ? '—' : stat.value}</div>
                 </div>
                 <div className="stat-icon">{stat.icon}</div>
               </div>
@@ -58,7 +174,7 @@ const AdminDashboard = () => {
               <Card className="h-100 border-0 shadow-sm">
                 <Card.Body className="p-4">
                   <div className="mb-3">{chart.title}</div>
-                  <div className="fs-5 fw-bold mb-2">{chart.value}</div>
+                  <div className="fs-5 fw-bold mb-2">{loading ? '—' : chart.value}</div>
                   <div style={{ color: '#28a745', fontSize: '0.9rem' }}>{chart.trend} from last month</div>
                   <div
                     style={{
