@@ -20,6 +20,8 @@ const Transactions = () => {
   const [modalTitle, setModalTitle] = useState('');
   const [modalContent, setModalContent] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     void loadTransactionHistory();
@@ -51,6 +53,7 @@ const Transactions = () => {
       );
 
       setTransactions(results);
+      setCurrentPage(1);
     } catch (err) {
       console.error('Unable to load transaction history', err);
       setError('Unable to load transaction history at this time.');
@@ -202,6 +205,10 @@ const Transactions = () => {
     }).format(date);
   };
 
+  const totalPages = Math.max(1, Math.ceil(transactions.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedTransactions = transactions.slice(startIndex, startIndex + pageSize);
+
   return (
     <div>
       <div className="d-flex align-items-center justify-content-between mb-4">
@@ -237,8 +244,8 @@ const Transactions = () => {
               </tr>
             </thead>
             <tbody>
-              {transactions.length > 0 ? (
-                transactions.map((tx) => (
+              {paginatedTransactions.length > 0 ? (
+                paginatedTransactions.map((tx) => (
                   <tr key={tx.documentId}>
                     <td className="fw-medium">{tx.documentId}</td>
                     <td>{tx.name}</td>
@@ -285,6 +292,23 @@ const Transactions = () => {
               )}
             </tbody>
           </Table>
+
+          {transactions.length > 0 && (
+            <div className="d-flex justify-content-between align-items-center mt-3">
+              <span className="text-muted small">
+                Showing {startIndex + 1}-{Math.min(startIndex + pageSize, transactions.length)} of {transactions.length} transactions
+              </span>
+              <div className="d-flex gap-2">
+                <Button variant="outline-secondary" size="sm" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1}>
+                  ← Previous
+                </Button>
+                <span className="align-self-center text-muted small">Page {currentPage} of {totalPages}</span>
+                <Button variant="outline-secondary" size="sm" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages}>
+                  Next →
+                </Button>
+              </div>
+            </div>
+          )}
         </Card.Body>
       </Card>
 
