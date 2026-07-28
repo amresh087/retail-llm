@@ -114,6 +114,20 @@ export const documentService = {
     }
   },
 
+  getTransactionXml: async (documentId: string, xmlType: 'edixml' | 'idocxml'): Promise<string> => {
+    try {
+      const response = await api.get(`/transaction/xml/${encodeURIComponent(documentId)}/${encodeURIComponent(xmlType)}`, {
+        responseType: 'text',
+      });
+      return typeof response.data === 'string' ? response.data : '';
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
+        return '';
+      }
+      throw error;
+    }
+  },
+
   updateTransformationJobStatus: async (jobId: string, status: string, payload?: string): Promise<TransformationJobStatus | null> => {
     const response = await api.put(`/documents/jobs/${jobId}`, {
       payload: payload ?? status,

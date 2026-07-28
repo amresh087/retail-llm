@@ -1,4 +1,4 @@
-import { Card, Button, Row, Col, Form, Alert, Spinner } from 'react-bootstrap';
+import { Card, Button, Row, Col, Form, Alert, Spinner, Modal } from 'react-bootstrap';
 import { useEffect, useState } from 'react';
 import { documentService } from '../../services/documentService';
 import { tenantService, type TenantRecord } from '../../services/tenantService';
@@ -23,11 +23,19 @@ type WorkflowStep = {
   status: WorkflowTimelineStatus;
 };
 
+type ArtifactKind = 'ediText' | 'ediXml' | 'idocXml';
+
+type ArtifactDetails = {
+  title: string;
+  description: string;
+  filename: string;
+  content: string;
+};
+
 const EDITransform = () => {
   const [selectedTenant, setSelectedTenant] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshingStatus, setRefreshingStatus] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +49,13 @@ const EDITransform = () => {
     createdAt: '',
     updatedAt: '',
   });
+  const [artifactState, setArtifactState] = useState<Record<ArtifactKind, ArtifactDetails>>({
+    ediText: { title: 'Updated EDI text', description: 'The normalized EDI text produced from your upload.', filename: '', content: '' },
+    ediXml: { title: 'EDI XML', description: 'The XML representation of the EDI payload.', filename: '', content: '' },
+    idocXml: { title: 'IDOC XML', description: 'The final IDOC XML payload.', filename: '', content: '' },
+  });
+  const [activeArtifact, setActiveArtifact] = useState<ArtifactKind | null>(null);
+  const [showArtifactModal, setShowArtifactModal] = useState(false);
 
   // Helper: recognize canonical server statuses and treat metadata payloads separately
   const isRecognizedServerStatus = (status?: string) => {
@@ -139,6 +154,12 @@ const EDITransform = () => {
           : 'The workflow status was refreshed from the document API.';
 
       const statusMessage = recognized ? nextMessage : (jobStatus?.payload ? `Metadata: ${jobStatus.payload}` : nextMessage);
+      const backendArtifacts = parseBackendArtifactPayload(jobStatus?.payload);
+      setArtifactState((previous) => ({
+        ...previous,
+        ediXml: backendArtifacts.ediXml ? { ...previous.ediXml, content: backendArtifacts.ediXml } : previous.ediXml,
+        idocXml: backendArtifacts.idocXml ? { ...previous.idocXml, content: backendArtifacts.idocXml } : previous.idocXml,
+      }));
       setSubmissionState((previous) => ({
         ...previous,
         documentStatus: latestStatus,
@@ -157,10 +178,246 @@ const EDITransform = () => {
     }
   };
 
+  const escapeXml = (value: string) =>
+    value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+
+  const formatXmlContent = (value: string) => {
+    const trimmed = value?.trim() || '';
+    if (!trimmed) {
+      return '';
+    }
+
+    try {
+      const parser = new DOMParser();
+      const document = parser.parseFromString(trimmed, 'application/xml');
+      const parserError = document.querySelector('parsererror');
+      if (parserError) {
+        throw new Error('Invalid XML payload');
+      }
+
+      const formatNode = (node: Node, level: number): string => {
+        const indent = '  '.repeat(level);
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent?.trim();
+          return text ? `${indent}${escapeXml(text)}` : '';
+        }
+
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+          return '';
+        }
+
+        const element = node as Element;
+        const attributes = Array.from(element.attributes)
+          .map((attribute) => `${attribute.name}="${escapeXml(attribute.value)}"`)
+          .join(' ');
+        const openingTag = `<${element.tagName}${attributes ? ` ${attributes}` : ''}>`;
+        const closingTag = `</${element.tagName}>`;
+        const childNodes = Array.from(element.childNodes).filter((child) => {
+          if (child.nodeType === Node.TEXT_NODE) {
+            return !!child.textContent?.trim();
+          }
+          return child.nodeType === Node.ELEMENT_NODE;
+        });
+
+        const childElements = childNodes.filter((child): child is Element => child.nodeType === Node.ELEMENT_NODE);
+        const textChildren = childNodes.filter((child) => child.nodeType === Node.TEXT_NODE);
+        const hasOnlyTextChild = childElements.length === 0 && textChildren.length === 1;
+        const hasSingleChildElement = childElements.length === 1 && textChildren.length === 0;
+
+        if (!childNodes.length) {
+          return `${indent}${openingTag}${closingTag}`;
+        }
+
+        if (hasOnlyTextChild) {
+          const textValue = textChildren[0].textContent?.trim() ?? '';
+          return `${indent}${openingTag}${escapeXml(textValue)}${closingTag}`;
+        }
+
+        if (hasSingleChildElement) {
+          const childContent = formatNode(childElements[0], level + 1).split('\n').map((line) => line.trim()).filter(Boolean);
+          if (childContent.length === 1) {
+            return `${indent}${openingTag}${childContent[0].trim()}${closingTag}`;
+          }
+        }
+
+        const innerContent = childNodes
+          .map((child) => formatNode(child, level + 1))
+          .filter(Boolean)
+          .join('\n');
+
+        return `${indent}${openingTag}\n${innerContent}\n${indent}${closingTag}`;
+      };
+
+      const root = document.documentElement;
+      return root ? formatNode(root, 0) : trimmed;
+    } catch {
+      return trimmed;
+    }
+  };
+
+  const parseBackendArtifactPayload = (payload?: string) => {
+    const normalizedPayload = payload?.trim() || '';
+    if (!normalizedPayload) {
+      return { ediXml: '', idocXml: '' };
+    }
+
+    const result = { ediXml: '', idocXml: '' };
+
+    const tryParseJsonPayload = () => {
+      try {
+        const parsed = JSON.parse(normalizedPayload);
+        if (parsed && typeof parsed === 'object') {
+          const maybeEdi = parsed.ediXml ?? parsed.ediXML ?? parsed.edi ?? parsed.edi_xml ?? parsed.ediXmlContent;
+          const maybeIdoc = parsed.idocXml ?? parsed.idocXML ?? parsed.idoc ?? parsed.idoc_xml ?? parsed.idocXmlContent;
+          if (typeof maybeEdi === 'string' && maybeEdi.trim()) {
+            result.ediXml = maybeEdi.trim();
+          }
+          if (typeof maybeIdoc === 'string' && maybeIdoc.trim()) {
+            result.idocXml = maybeIdoc.trim();
+          }
+        }
+      } catch {
+        // Fallback to string-based parsing below.
+      }
+    };
+
+    const tryParseKeyValuePayload = () => {
+      const segments = normalizedPayload
+        .split(/(?:\r?\n|;)/)
+        .map((segment) => segment.trim())
+        .filter(Boolean);
+
+      segments.forEach((segment) => {
+        const separatorIndex = segment.indexOf('=');
+        if (separatorIndex === -1) {
+          const colonIndex = segment.indexOf(':');
+          if (colonIndex === -1) {
+            return;
+          }
+
+          const key = segment.slice(0, colonIndex).trim().toLowerCase();
+          const value = segment.slice(colonIndex + 1).trim();
+          if (/^(edi|edixml|edi_xml|edi-xml)$/.test(key)) {
+            result.ediXml = value;
+          } else if (/^(idoc|idocxml|idoc_xml|idoc-xml)$/.test(key)) {
+            result.idocXml = value;
+          }
+          return;
+        }
+
+        const key = segment.slice(0, separatorIndex).trim().toLowerCase();
+        const value = segment.slice(separatorIndex + 1).trim();
+
+        if (/^(edi|edixml|edi_xml|edi-xml)$/.test(key)) {
+          result.ediXml = value;
+        } else if (/^(idoc|idocxml|idoc_xml|idoc-xml)$/.test(key)) {
+          result.idocXml = value;
+        }
+      });
+    };
+
+    tryParseJsonPayload();
+    if (!result.ediXml && !result.idocXml) {
+      tryParseKeyValuePayload();
+    }
+
+    if (!result.ediXml && !result.idocXml) {
+      const lowerPayload = normalizedPayload.toLowerCase();
+      if (lowerPayload.includes('<idoc') || lowerPayload.includes('<message')) {
+        result.idocXml = normalizedPayload;
+      } else if (normalizedPayload.startsWith('<?xml') || normalizedPayload.includes('<')) {
+        result.ediXml = normalizedPayload;
+      }
+    }
+
+    return result;
+  };
+
+  const buildArtifacts = (sourceText: string, fileName: string, transactionType: string) => {
+    const normalizedText = sourceText.replace(/\r\n/g, '\n').trim();
+    const cleanedText = normalizedText
+      .split('\n')
+      .filter((line) => !line.trim().startsWith(';'))
+      .join('\n')
+      .trim();
+    const ediTextContent = cleanedText || '(No EDI content available)';
+    const segments = cleanedText.split('\n').map((segment) => segment.trim()).filter(Boolean);
+    const segmentXml = segments
+      .map((segment, index) => `    <segment line="${index + 1}">${escapeXml(segment)}</segment>`)
+      .join('\n');
+    const ediXmlContent = `<?xml version="1.0" encoding="UTF-8"?>\n<ediMessage transactionType="${escapeXml(transactionType)}">\n  <sourceFile>${escapeXml(fileName)}</sourceFile>\n  <segmentCount>${segments.length}</segmentCount>\n  <segments>\n${segmentXml}\n  </segments>\n  <rawContent>${escapeXml(cleanedText)}</rawContent>\n</ediMessage>`;
+    const idocXmlContent = `<?xml version="1.0" encoding="UTF-8"?>\n<IDOC>\n  <Header>\n    <MessageType>${escapeXml(transactionType)}</MessageType>\n    <Source>${escapeXml(fileName)}</Source>\n  </Header>\n  <Data>\n    <rawContent>${escapeXml(cleanedText)}</rawContent>\n  </Data>\n</IDOC>`;
+
+    return {
+      ediText: {
+        title: 'Updated EDI text',
+        description: 'The normalized EDI text produced from your upload.',
+        filename: `${fileName.replace(/\.txt$/i, '')}-updated.txt`,
+        content: ediTextContent,
+      },
+      ediXml: {
+        title: 'EDI XML',
+        description: 'The XML representation of the EDI payload.',
+        filename: `${fileName.replace(/\.txt$/i, '')}-edi.xml`,
+        content: ediXmlContent,
+      },
+      idocXml: {
+        title: 'IDOC XML',
+        description: 'The final transformed IDOC XML payload.',
+        filename: `${fileName.replace(/\.txt$/i, '')}-idoc.xml`,
+        content: idocXmlContent,
+      },
+    } satisfies Record<ArtifactKind, ArtifactDetails>;
+  };
+
+  const getWorkflowStage = (status: string) => {
+    const normalized = status.trim().toLowerCase();
+    if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
+      return 4;
+    }
+    if (normalized.includes('fail') || normalized.includes('error')) {
+      return 4;
+    }
+    if (normalized.includes('pending') || normalized.includes('processing') || normalized.includes('running') || normalized.includes('queue')) {
+      return 3;
+    }
+    if (normalized.includes('edi_text_to_edi_xml')) {
+      return 2;
+    }
+    if (normalized.includes('edi_xml_to_idoc_xml')) {
+      return 3;
+    }
+    return 1;
+  };
+
+  const getArtifactAvailability = (artifactKind: ArtifactKind, workflowStage: number) => {
+    switch (artifactKind) {
+      case 'ediText':
+        return workflowStage >= 1;
+      case 'ediXml':
+        return workflowStage >= 2;
+      case 'idocXml':
+        return workflowStage >= 4;
+      default:
+        return false;
+    }
+  };
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0] ?? null;
     if (!selectedFile) {
       setFile(null);
+      setArtifactState({
+        ediText: { title: 'Updated EDI text', description: 'The normalized EDI text produced from your upload.', filename: '', content: '' },
+        ediXml: { title: 'EDI XML', description: 'The XML representation of the EDI payload.', filename: '', content: '' },
+        idocXml: { title: 'IDOC XML', description: 'The final transformed IDOC XML payload.', filename: '', content: '' },
+      });
+      setActiveArtifact(null);
       setError('');
       return;
     }
@@ -168,12 +425,24 @@ const EDITransform = () => {
     const extension = selectedFile.name.split('.').pop()?.toLowerCase();
     if (extension !== 'txt') {
       setFile(null);
+      setArtifactState({
+        ediText: { title: 'Updated EDI text', description: 'The normalized EDI text produced from your upload.', filename: '', content: '' },
+        ediXml: { title: 'EDI XML', description: 'The XML representation of the EDI payload.', filename: '', content: '' },
+        idocXml: { title: 'IDOC XML', description: 'The final transformed IDOC XML payload.', filename: '', content: '' },
+      });
+      setActiveArtifact(null);
       setError('Please select a .txt file.');
       event.target.value = '';
       return;
     }
 
     setFile(selectedFile);
+    setArtifactState({
+      ediText: { title: 'Updated EDI text', description: 'The normalized EDI text produced from your upload.', filename: '', content: '' },
+      ediXml: { title: 'EDI XML', description: 'The XML representation of the EDI payload.', filename: '', content: '' },
+      idocXml: { title: 'IDOC XML', description: 'The final transformed IDOC XML payload.', filename: '', content: '' },
+    });
+    setActiveArtifact(null);
     setError('');
   };
 
@@ -185,7 +454,7 @@ const EDITransform = () => {
 
     setLoading(true);
     setError('');
-    setResult('');
+    setActiveArtifact(null);
     setSubmissionState({ status: 'idle', transformationId: '', documentStatus: '', message: '', createdAt: '', updatedAt: '' });
 
     try {
@@ -202,6 +471,11 @@ const EDITransform = () => {
       };
 
       const uploadedDocument = await documentService.upload(documentPayload, file);
+      const fileText = await file.text();
+      const builtArtifacts = buildArtifacts(fileText, file.name, selectedType);
+      setArtifactState(builtArtifacts);
+      setActiveArtifact('ediText');
+
       const documentId = uploadedDocument.id || uploadedDocument.name || 'pending';
       const jobStatus = await documentService.getTransformationJobStatus(documentId);
       const candidateStatus = jobStatus?.status?.trim() || uploadedDocument.status || 'Indexed';
@@ -226,14 +500,70 @@ const EDITransform = () => {
     }
   };
 
-  const handleDownload = () => {
-    if (!result) return;
+  const openArtifactModal = async (artifactKind: ArtifactKind) => {
+    setActiveArtifact(artifactKind);
+    setShowArtifactModal(true);
 
-    const blob = new Blob([result], { type: 'application/xml;charset=utf-8' });
+    if (!submissionState.transformationId) {
+      return;
+    }
+
+    try {
+      if (artifactKind === 'ediXml' || artifactKind === 'idocXml') {
+        const xmlType = artifactKind === 'ediXml' ? 'edixml' : 'idocxml';
+        const xmlContent = await documentService.getTransactionXml(submissionState.transformationId, xmlType);
+
+        if (xmlContent) {
+          const formattedXml = formatXmlContent(xmlContent);
+          setArtifactState((previous) => ({
+            ...previous,
+            [artifactKind]: {
+              ...previous[artifactKind],
+              content: formattedXml || xmlContent,
+            },
+          }));
+          return;
+        }
+      }
+
+      const jobStatus = await documentService.getTransformationJobStatus(submissionState.transformationId);
+      const backendArtifacts = parseBackendArtifactPayload(jobStatus?.payload);
+      const artifactContent = artifactKind === 'ediXml' ? backendArtifacts.ediXml : artifactKind === 'idocXml' ? backendArtifacts.idocXml : artifactState[artifactKind].content;
+
+      if (artifactContent) {
+        setArtifactState((previous) => ({
+          ...previous,
+          [artifactKind]: {
+            ...previous[artifactKind],
+            content: artifactContent,
+          },
+        }));
+      }
+    } catch (err) {
+      console.error('Unable to refresh artifact content', err);
+    }
+  };
+
+  const closeArtifactModal = () => {
+    setShowArtifactModal(false);
+  };
+
+  const handleDownloadArtifact = (artifactKind: ArtifactKind) => {
+    const artifact = artifactState[artifactKind];
+    if (!artifact.content) return;
+
+    const documentId = submissionState.transformationId?.trim() || 'document';
+    const fallbackName = artifactKind === 'ediXml'
+      ? `${documentId}-edi.xml`
+      : artifactKind === 'idocXml'
+        ? `${documentId}-idoc.xml`
+        : artifact.filename;
+
+    const blob = new Blob([artifact.content], { type: artifactKind === 'ediText' ? 'text/plain;charset=utf-8' : 'application/xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${selectedType || 'edi'}-transformed.xml`;
+    link.download = fallbackName || artifact.filename;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -307,26 +637,6 @@ const EDITransform = () => {
     return `${seconds}s`;
   };
 
-  const getWorkflowStage = (status: string) => {
-    const normalized = status.trim().toLowerCase();
-    if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
-      return 4;
-    }
-    if (normalized.includes('fail') || normalized.includes('error')) {
-      return 4;
-    }
-    if (normalized.includes('pending') || normalized.includes('processing') || normalized.includes('running') || normalized.includes('queue')) {
-      return 3;
-    }
-    if (normalized.includes('edi_text_to_edi_xml')) {
-      return 2;
-    }
-    if (normalized.includes('edi_xml_to_idoc_xml')) {
-      return 3;
-    }
-    return 1;
-  };
-
   const getWorkflowStepStates = (status: string) => {
     const normalized = status.trim().toLowerCase();
     const isCompleted = /complete|success|done/.test(normalized);
@@ -336,7 +646,7 @@ const EDITransform = () => {
     return {
       step1: workflowStage >= 1 ? 'completed' : 'active',
       step2: workflowStage >= 2 ? 'completed' : 'pending',
-      step3: workflowStage === 4 ? 'completed' : workflowStage >= 3 ? 'active' : 'pending',
+      step3: workflowStage === 4 ? 'completed' : workflowStage === 3 ? 'active' : 'pending',
       step4: isFailed ? 'failed' : isCompleted ? 'completed' : 'pending',
     };
   };
@@ -391,6 +701,9 @@ const EDITransform = () => {
     ];
   })();
 
+  const artifactPreview = activeArtifact ? artifactState[activeArtifact] : null;
+  const currentWorkflowStage = getWorkflowStage(submissionState.documentStatus || 'submitted');
+
   const placeholderWorkflowSteps: WorkflowStep[] = [
     {
       title: '1. Submitted',
@@ -425,6 +738,7 @@ const EDITransform = () => {
         const isCompleted = step.status === 'completed';
         const isFailed = step.status === 'failed';
         const isPending = step.status === 'pending';
+        const showArtifactActions = index === 0 ? getArtifactAvailability('ediText', currentWorkflowStage) : index === 1 ? getArtifactAvailability('ediXml', currentWorkflowStage) : index === 2 ? getArtifactAvailability('idocXml', currentWorkflowStage) : false;
 
         return (
           <div key={`${step.title}-${index}`} className="d-flex align-items-start gap-3">
@@ -446,6 +760,19 @@ const EDITransform = () => {
                 <div className="mt-2 small text-muted">
                   <div>Duration: {step.duration}</div>
                 </div>
+                {showArtifactActions && (
+                  <div className="d-flex flex-wrap gap-2 mt-3">
+                    {index === 0 && (
+                      <Button variant="outline-primary" size="sm" onClick={() => void openArtifactModal('ediText')}>View updated EDI text</Button>
+                    )}
+                    {index === 1 && (
+                      <Button variant="outline-primary" size="sm" onClick={() => void openArtifactModal('ediXml')}>View EDI XML</Button>
+                    )}
+                    {index === 2 && (
+                      <Button variant="outline-primary" size="sm" onClick={() => void openArtifactModal('idocXml')}>View IDOC XML</Button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -585,22 +912,31 @@ const EDITransform = () => {
             </Card>
 
 
-            {result && (
-              <Card className="border-0 shadow-sm">
-                <Card.Header className="bg-white border-bottom d-flex justify-content-between align-items-center">
-                  <Card.Title className="mb-0">Generated XML Preview</Card.Title>
-                  <div>
-                    <Button variant="outline-primary" size="sm" onClick={handleDownload}>📥 Download</Button>
-                  </div>
-                </Card.Header>
-                <Card.Body>
-                  <pre style={{ maxHeight: '420px', overflow: 'auto', fontSize: '0.85rem', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{result}</pre>
-                </Card.Body>
-              </Card>
-            )}
           </div>
         </Col>
       </Row>
+
+      <Modal show={showArtifactModal} onHide={closeArtifactModal} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>{artifactPreview?.title || 'Transformation artifact'}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {artifactPreview ? (
+            <>
+              <p className="text-muted small mb-3">{artifactPreview.description}</p>
+              <pre style={{ maxHeight: '60vh', overflow: 'auto', fontSize: '0.85rem', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{artifactPreview.content}</pre>
+            </>
+          ) : (
+            <div className="text-muted">No artifact is available yet.</div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={closeArtifactModal}>Close</Button>
+          {artifactPreview && (
+            <Button variant="primary" onClick={() => handleDownloadArtifact(activeArtifact!)}>Download</Button>
+          )}
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };

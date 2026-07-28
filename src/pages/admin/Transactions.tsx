@@ -14,6 +14,7 @@ type TransactionHistoryRow = {
 const Transactions = () => {
   const [transactions, setTransactions] = useState<TransactionHistoryRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -26,8 +27,13 @@ const Transactions = () => {
 
     try {
       const documents = await documentService.getAll('edi-to-xml');
+      const visibleDocuments = documents.filter((document) => {
+        const mappingType = document.mappingType?.toLowerCase() ?? '';
+        const name = document.name?.toLowerCase() ?? '';
+        return !mappingType.includes('mapping') && !mappingType.includes('idoc') && !name.includes('mapping') && !name.includes('xslt') && !name.includes('templet');
+      });
       const results = await Promise.all(
-        documents.map(async (document) => {
+        visibleDocuments.map(async (document) => {
           const jobStatus = document.id ? await documentService.getTransformationJobStatus(document.id) : null;
           return {
             documentId: document.id,
@@ -46,6 +52,23 @@ const Transactions = () => {
       setError('Unable to load transaction history at this time.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteTransaction = async (documentId: string) => {
+    if (!documentId) return;
+
+    setDeletingId(documentId);
+    setError('');
+
+    try {
+      await documentService.remove(documentId);
+      await loadTransactionHistory();
+    } catch (err) {
+      console.error('Unable to delete transaction', err);
+      setError('Unable to delete this transaction right now.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -124,7 +147,15 @@ const Transactions = () => {
                     <td>{formatUpdatedAt(tx.updatedAt)}</td>
                     <td>
                       <Button variant="outline-primary" size="sm" className="me-2">View</Button>
-                      <Button variant="outline-secondary" size="sm">📥 XML</Button>
+                      <Button variant="outline-secondary" size="sm" className="me-2">📥 XML</Button>
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        onClick={() => void handleDeleteTransaction(tx.documentId?.trim() || '')}
+                        disabled={deletingId === tx.documentId}
+                      >
+                        {deletingId === tx.documentId ? <Spinner animation="border" size="sm" /> : '🗑 Delete'}
+                      </Button>
                     </td>
                   </tr>
                 ))
