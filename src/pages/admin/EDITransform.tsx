@@ -1,4 +1,4 @@
-import { Card, Button, Row, Col, Form, Alert, Badge, Spinner } from 'react-bootstrap';
+import { Card, Button, Row, Col, Form, Alert, Spinner } from 'react-bootstrap';
 import { useEffect, useState } from 'react';
 import { documentService } from '../../services/documentService';
 import { tenantService, type TenantRecord } from '../../services/tenantService';
@@ -11,6 +11,16 @@ type SubmissionState = {
   message: string;
   createdAt: string;
   updatedAt: string;
+};
+
+type WorkflowTimelineStatus = 'active' | 'completed' | 'pending' | 'failed';
+
+type WorkflowStep = {
+  title: string;
+  caption: string;
+  startedAt?: Date;
+  duration: string;
+  status: WorkflowTimelineStatus;
 };
 
 const EDITransform = () => {
@@ -116,8 +126,6 @@ const EDITransform = () => {
       setRefreshingStatus(true);
     }
 
-    console.log('Workflow status refresh requested for transformation ID:', submissionState.transformationId);
-
     try {
       const jobStatus = await documentService.getTransformationJobStatus(submissionState.transformationId);
       const candidateStatus = jobStatus?.status?.trim() || submissionState.documentStatus || 'Indexed';
@@ -131,13 +139,6 @@ const EDITransform = () => {
           : 'The workflow status was refreshed from the document API.';
 
       const statusMessage = recognized ? nextMessage : (jobStatus?.payload ? `Metadata: ${jobStatus.payload}` : nextMessage);
-      console.log('Document API workflow status response:', {
-        transformationId: submissionState.transformationId,
-        status: latestStatus,
-        message: statusMessage,
-        apiResponse: jobStatus,
-      });
-
       setSubmissionState((previous) => ({
         ...previous,
         documentStatus: latestStatus,
@@ -200,13 +201,6 @@ const EDITransform = () => {
         contentType: extension === 'txt' ? 'text/plain' : extension === 'xml' ? 'application/xml' : 'application/octet-stream',
       };
 
-      console.log('Submitting EDI transformation request to document API:', {
-        tenant: selectedTenant,
-        transactionTypeCode: selectedType,
-        fileName: file.name,
-        payload: documentPayload,
-      });
-
       const uploadedDocument = await documentService.upload(documentPayload, file);
       const documentId = uploadedDocument.id || uploadedDocument.name || 'pending';
       const jobStatus = await documentService.getTransformationJobStatus(documentId);
@@ -215,13 +209,6 @@ const EDITransform = () => {
       const effectiveStatus = recognized ? candidateStatus : (uploadedDocument.status || 'Indexed');
 
       const submittedMessage = 'The upload request was accepted and the transformation workflow has started.';
-      console.log('Initial workflow submission response:', {
-        documentId,
-        status: effectiveStatus,
-        documentResponse: uploadedDocument,
-        workflowResponse: jobStatus,
-      });
-
       setSubmissionState({
         status: 'submitted',
         transformationId: documentId,
@@ -356,7 +343,7 @@ const EDITransform = () => {
 
   const workflowStage = getWorkflowStage(submissionState.documentStatus || 'submitted');
   const workflowStepStates = getWorkflowStepStates(submissionState.documentStatus || 'submitted');
-  const workflowSteps = (() => {
+  const workflowSteps: WorkflowStep[] = (() => {
     const normalizedStatus = (submissionState.documentStatus || '').trim().toLowerCase();
     const isCompleted = /complete|success|done/.test(normalizedStatus);
     const isFailed = /fail|error/.test(normalizedStatus);
@@ -404,6 +391,69 @@ const EDITransform = () => {
     ];
   })();
 
+  const placeholderWorkflowSteps: WorkflowStep[] = [
+    {
+      title: '1. Submitted',
+      caption: 'The request is waiting to begin',
+      duration: '—',
+      status: 'pending',
+    },
+    {
+      title: '2. EDI text → EDI XML',
+      caption: 'This stage will appear once the job starts',
+      duration: '—',
+      status: 'pending',
+    },
+    {
+      title: '3. EDI XML → IDOC XML',
+      caption: 'The transformation flow will continue here',
+      duration: '—',
+      status: 'pending',
+    },
+    {
+      title: '4. Completed / Failed',
+      caption: 'The final state will be added when the workflow finishes',
+      duration: '—',
+      status: 'pending',
+    },
+  ];
+
+  const renderWorkflowTimeline = (steps: WorkflowStep[]) => (
+    <div className="d-flex flex-column gap-3">
+      {steps.map((step, index) => {
+        const isActive = step.status === 'active';
+        const isCompleted = step.status === 'completed';
+        const isFailed = step.status === 'failed';
+        const isPending = step.status === 'pending';
+
+        return (
+          <div key={`${step.title}-${index}`} className="d-flex align-items-start gap-3">
+            <div className="d-flex flex-column align-items-center" style={{ minWidth: 36 }}>
+              <div className="rounded-circle d-inline-flex align-items-center justify-content-center" style={{ width: 36, height: 36, backgroundColor: isCompleted ? '#198754' : isFailed ? '#dc3545' : isActive ? '#0d6efd' : '#e9ecef', color: isCompleted || isFailed || isActive ? '#fff' : '#6c757d', fontSize: '0.95rem' }}>
+                {index + 1}
+              </div>
+              {index < steps.length - 1 && (
+                <div className="mt-2" style={{ width: 2, height: 28, backgroundColor: isCompleted ? '#198754' : isFailed ? '#dc3545' : isActive ? '#0d6efd' : '#e9ecef' }} />
+              )}
+            </div>
+            <div className="flex-grow-1 py-1">
+              <div>
+                <div className="fw-semibold d-flex align-items-center">
+                  {isActive && <Spinner animation="border" size="sm" className="me-2" />}
+                  <span>{step.title}</span>
+                </div>
+                <div className="text-muted small">{step.caption}</div>
+                <div className="mt-2 small text-muted">
+                  <div>Duration: {step.duration}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="py-3">
       <div className="border rounded-4 p-4 mb-4 bg-light-subtle" style={{ borderColor: '#e5e7eb' }}>
@@ -413,12 +463,7 @@ const EDITransform = () => {
             <p className="text-muted mb-0">Upload an EDI text file, submit it for transformation, and monitor the workflow status from the document API.</p>
           </div>
           <div className="d-flex flex-wrap gap-2 align-items-center">
-            <Badge bg={submissionState.status === 'submitted' ? 'success' : 'secondary'} pill className="px-3 py-2">
-              {submissionState.status === 'submitted' ? 'Submitted request' : 'Ready to submit'}
-            </Badge>
-            <Badge bg="outline-secondary" text="dark" pill className="px-3 py-2 border">
-              XML preview available
-            </Badge>
+            <span className="text-muted small">{submissionState.status === 'submitted' ? 'Submitted request' : 'Ready to submit'}</span>
           </div>
         </div>
       </div>
@@ -434,14 +479,12 @@ const EDITransform = () => {
                   <h5 className="mb-1">Upload & transform</h5>
                   <p className="text-muted small mb-0">Complete the steps below to submit an EDI file.</p>
                 </div>
-                <Badge bg="primary">Workflow</Badge>
               </div>
 
               <div className="d-flex flex-column gap-3">
                 <div className="p-3 rounded-3 border bg-light-subtle">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
+                  <div className="mb-2">
                     <div className="fw-semibold">Step 1 • Select options</div>
-                    <Badge bg="secondary">{selectedTenant || 'Tenant'}</Badge>
                   </div>
                   <Form.Group className="mb-3">
                     <Form.Label className="small fw-semibold">Tenant</Form.Label>
@@ -490,13 +533,6 @@ const EDITransform = () => {
                   <Card.Text className="text-muted mb-0">Results returned by the document API</Card.Text>
                 </div>
                 <div className="d-flex align-items-center gap-2">
-                  {submissionState.status === 'submitted' ? (
-                    <Badge bg={getWorkflowBadgeVariant(submissionState.documentStatus || 'submitted')}>
-                      {getWorkflowStageLabel(submissionState.documentStatus || 'submitted')}
-                    </Badge>
-                  ) : (
-                    <Badge bg="secondary">Idle</Badge>
-                  )}
                   <Button variant="outline-secondary" size="sm" onClick={() => void refreshSubmissionStatus()} disabled={refreshingStatus || submissionState.status !== 'submitted'}>
                     {refreshingStatus ? <><Spinner animation="border" size="sm" className="me-2" />Refreshing</> : '🔄 Refresh'}
                   </Button>
@@ -506,14 +542,9 @@ const EDITransform = () => {
                 {submissionState.status === 'submitted' ? (
                   <div className="d-flex flex-column gap-3">
                     <div className="p-3 rounded-4 border bg-light-subtle">
-                      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-                        <div>
-                          <div className="fw-semibold">Results returned by the document API</div>
-                          <div className="text-muted small">Live workflow execution details</div>
-                        </div>
-                        <Badge bg={getWorkflowBadgeVariant(submissionState.documentStatus || 'submitted')} className="px-3 py-2">
-                          {getWorkflowStageLabel(submissionState.documentStatus || 'submitted').toUpperCase()}
-                        </Badge>
+                      <div className="mb-3">
+                        <div className="fw-semibold">Results returned by the document API</div>
+                        <div className="text-muted small">Live workflow execution details</div>
                       </div>
 
                       <div className="d-flex flex-column flex-md-row gap-3 mb-3">
@@ -528,67 +559,26 @@ const EDITransform = () => {
                       </div>
 
                       <div className="rounded-3 border bg-white p-3">
-                        <div className="d-flex justify-content-between align-items-center mb-3">
-                          <div>
-                            <h6 className="mb-1">Workflow status</h6>
-                            <div className="text-muted small">{submissionState.message}</div>
-                          </div>
-                          <Badge bg="info" text="dark" className="px-3 py-2">
-                            {submissionState.documentStatus || 'SUBMITTED'}
-                          </Badge>
+                        <div className="mb-3">
+                          <h6 className="mb-1">Workflow status</h6>
+                          <div className="text-muted small">{submissionState.message}</div>
                         </div>
 
-                        <div className="d-flex flex-column gap-3">
-                          {workflowSteps.map((step, index) => {
-                            const isActive = step.status === 'active';
-                            const isCompleted = step.status === 'completed';
-                            const isFailed = step.status === 'failed';
-                            const isPending = step.status === 'pending';
-
-                            return (
-                              <div key={`${step.title}-${index}`} className="d-flex align-items-start gap-3">
-                                <div className="d-flex flex-column align-items-center" style={{ minWidth: 36 }}>
-                                  <div className="rounded-circle d-inline-flex align-items-center justify-content-center" style={{ width: 36, height: 36, backgroundColor: isCompleted ? '#198754' : isFailed ? '#dc3545' : isActive ? '#0d6efd' : '#e9ecef', color: isCompleted || isFailed || isActive ? '#fff' : '#6c757d', fontSize: '0.95rem' }}>
-                                    {isCompleted ? '✓' : isFailed ? '✕' : index + 1}
-                                  </div>
-                                  {index < workflowSteps.length - 1 && (
-                                    <div className="mt-2" style={{ width: 2, height: 28, backgroundColor: isCompleted ? '#198754' : isFailed ? '#dc3545' : isActive ? '#0d6efd' : '#e9ecef' }} />
-                                  )}
-                                </div>
-                                <div className="flex-grow-1 py-1">
-                                  <div className="d-flex align-items-start justify-content-between">
-                                    <div>
-                                      <div className="fw-semibold d-flex align-items-center">
-                                        {isActive && <Spinner animation="border" size="sm" className="me-2" />}
-                                        <span>{step.title}</span>
-                                      </div>
-                                      <div className="text-muted small">{step.caption}</div>
-                                      <div className="mt-2 small text-muted">
-                                        <div>Started: {formatDateTime(step.startedAt?.toISOString())}</div>
-                                        <div>Duration: {step.duration}</div>
-                                      </div>
-                                    </div>
-                                    <div className="text-end ms-3">
-                                      <Badge bg={isCompleted ? 'success' : isFailed ? 'danger' : isActive ? 'info' : 'secondary'} className="px-2 py-1">
-                                        {isActive ? getWorkflowStageLabel(submissionState.documentStatus || '') : isCompleted ? 'Completed' : isFailed ? 'Failed' : 'Pending'}
-                                      </Badge>
-                                    </div>
-                                  </div>
-                                  {isActive && (
-                                    <div className="mt-2 small fw-semibold text-primary">CURRENT STAGE</div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                        {renderWorkflowTimeline(workflowSteps)}
                       </div>
                     </div>
                   </div>
                 ) : (
                   <div className="rounded-4 border border-dashed p-4 text-center text-muted bg-light-subtle">
-                    <div className="fw-semibold mb-2">No submission yet</div>
-                    <div>Use the panel on the left to submit an EDI file and watch the workflow appear here.</div>
+                    <div className="fw-semibold mb-2">No active workflow yet</div>
+                    <div className="mb-3">Use the panel on the left to submit an EDI file and watch the workflow appear here.</div>
+                    <div className="rounded-3 border bg-white p-3 text-start">
+                      <div className="mb-3">
+                        <h6 className="mb-1">Workflow preview</h6>
+                        <div className="text-muted small">A few placeholder stages will keep the panel looking complete before the job starts.</div>
+                      </div>
+                      {renderWorkflowTimeline(placeholderWorkflowSteps)}
+                    </div>
                   </div>
                 )}
               </Card.Body>
