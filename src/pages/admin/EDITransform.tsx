@@ -32,6 +32,16 @@ const EDITransform = () => {
     updatedAt: '',
   });
 
+  // Helper: recognize canonical server statuses and treat metadata payloads separately
+  const isRecognizedServerStatus = (status?: string) => {
+    if (!status) return false;
+    const normalized = status.trim().toUpperCase();
+    const canonical = /^(SUBMITTED|EDI_TEXT_TO_EDI_XML|EDI_XML_TO_IDOC_XML|PROCESSING|COMPLETED|PENDING|CANCELLED|FAILED)$/;
+    if (canonical.test(normalized)) return true;
+    if (status.includes('=') || status.includes(';')) return false; // metadata
+    return /^[A-Z_]+$/.test(normalized);
+  };
+
   useEffect(() => {
     void loadOptions();
   }, []);
@@ -41,14 +51,18 @@ const EDITransform = () => {
       return;
     }
 
-    const shouldAutoPoll = /pending|processing|running|queued|submitted|edi_text_to_edi_xml|edi_xml_to_idoc_xml/i.test(submissionState.documentStatus);
+    const normalized = (submissionState.documentStatus || '').trim().toLowerCase();
+    const shouldAutoPoll = /pending|processing|running|queued|submitted|edi_text_to_edi_xml|edi_xml_to_idoc_xml/i.test(normalized);
     if (!shouldAutoPoll) {
       return;
     }
 
+    const fastPoll = /edi_text_to_edi_xml|edi_xml_to_idoc_xml|processing|running/.test(normalized);
+    const intervalMs = fastPoll ? 2000 : 5000;
+
     const timer = window.setInterval(() => {
       void refreshSubmissionStatus(false);
-    }, 5000);
+    }, intervalMs);
 
     return () => window.clearInterval(timer);
   }, [submissionState.status, submissionState.documentStatus, submissionState.transformationId]);
@@ -74,7 +88,6 @@ const EDITransform = () => {
       setError('Unable to load tenant and transaction options.');
     }
   };
-
 
   const updateJobStatus = async (status: string, payload?: string) => {
     if (!submissionState.transformationId) {
@@ -105,7 +118,9 @@ const EDITransform = () => {
 
     try {
       const jobStatus = await documentService.getTransformationJobStatus(submissionState.transformationId);
-      const latestStatus = jobStatus?.status || submissionState.documentStatus || 'Indexed';
+      const candidateStatus = jobStatus?.status?.trim() || submissionState.documentStatus || 'Indexed';
+      const recognized = isRecognizedServerStatus(candidateStatus);
+      const latestStatus = recognized ? candidateStatus : submissionState.documentStatus || 'Indexed';
       const normalizedStatus = latestStatus.toLowerCase();
       const nextMessage = normalizedStatus.includes('complete') || normalizedStatus.includes('success')
         ? 'The workflow completed successfully.'
@@ -116,7 +131,7 @@ const EDITransform = () => {
       setSubmissionState((previous) => ({
         ...previous,
         documentStatus: latestStatus,
-        message: nextMessage,
+        message: recognized ? nextMessage : (jobStatus?.payload ? `Metadata: ${jobStatus.payload}` : nextMessage),
         createdAt: jobStatus?.createdAt || previous.createdAt || new Date().toISOString(),
         updatedAt: jobStatus?.updatedAt || new Date().toISOString(),
       }));
@@ -178,18 +193,20 @@ const EDITransform = () => {
       const uploadedDocument = await documentService.upload(documentPayload, file);
       const documentId = uploadedDocument.id || uploadedDocument.name || 'pending';
       const jobStatus = await documentService.getTransformationJobStatus(documentId);
-      const latestStatus = jobStatus?.status || uploadedDocument.status || 'Indexed';
+      const candidateStatus = jobStatus?.status?.trim() || uploadedDocument.status || 'Indexed';
+      const recognized = isRecognizedServerStatus(candidateStatus);
+      const effectiveStatus = recognized ? candidateStatus : (uploadedDocument.status || 'Indexed');
 
       const submittedMessage = 'The upload request was accepted and the transformation workflow has started.';
       setSubmissionState({
         status: 'submitted',
         transformationId: documentId,
-        documentStatus: latestStatus,
-        message: submittedMessage,
+        documentStatus: effectiveStatus,
+        message: recognized ? submittedMessage : (jobStatus?.payload ? `Metadata: ${jobStatus.payload}` : submittedMessage),
         createdAt: jobStatus?.createdAt || new Date().toISOString(),
         updatedAt: jobStatus?.updatedAt || new Date().toISOString(),
       });
-      await updateJobStatus(latestStatus, submittedMessage);
+      await updateJobStatus(effectiveStatus, submittedMessage);
     } catch (err) {
       console.error(err);
       setError('Unable to upload the file to the document API and transform it.');
@@ -210,12 +227,11 @@ const EDITransform = () => {
     URL.revokeObjectURL(url);
   };
 
-
   const getProgressValue = () => {
     if (loading) return 60;
     if (submissionState.status !== 'submitted') return 0;
 
-    const status = submissionState.documentStatus.toLowerCase();
+    const status = submissionState.documentStatus.trim().toLowerCase();
     if (status.includes('pending') || status.includes('queued')) return 35;
     if (status.includes('process') || status.includes('running')) return 70;
     return 100;
@@ -229,7 +245,7 @@ const EDITransform = () => {
   };
 
   const getStatusBadgeVariant = (status: string) => {
-    const normalized = status.toLowerCase();
+    const normalized = status.trim().toLowerCase();
     if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
       return 'success';
     }
@@ -243,7 +259,7 @@ const EDITransform = () => {
   };
 
   const getStatusLabel = (status: string) => {
-    const normalized = status.toLowerCase();
+    const normalized = status.trim().toLowerCase();
     if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
       return 'Completed';
     }
@@ -301,7 +317,7 @@ const EDITransform = () => {
   };
 
   const getWorkflowStage = (status: string) => {
-    const normalized = status.toLowerCase();
+    const normalized = status.trim().toLowerCase();
     if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
       return 4;
     }
@@ -314,46 +330,56 @@ const EDITransform = () => {
     if (normalized.includes('edi_text_to_edi_xml')) {
       return 2;
     }
+    if (normalized.includes('processing') || normalized.includes('pending')) {
+      return 2;
+    }
     return 1;
   };
 
   const workflowStage = getWorkflowStage(submissionState.documentStatus || 'submitted');
   const workflowSteps = (() => {
-    const isCompleted = /complete|success|done/.test((submissionState.documentStatus || '').toLowerCase());
-    const isFailed = /fail|error/.test((submissionState.documentStatus || '').toLowerCase());
-    const isProcessing = /process|running|queue|pending/.test((submissionState.documentStatus || '').toLowerCase());
-    const currentStartedAt = parseDate(submissionState.createdAt) ?? parseDate(submissionState.updatedAt) ?? new Date();
-    const lastUpdatedAt = parseDate(submissionState.updatedAt) ?? new Date();
-    const stage2Start = currentStartedAt;
-    const stage3Start = workflowStage >= 3 ? new Date(currentStartedAt.getTime() + 30000) : null;
-    const finalStart = isCompleted || isFailed ? lastUpdatedAt : null;
+    const normalizedStatus = (submissionState.documentStatus || '').trim().toLowerCase();
+    const isCompleted = /complete|success|done/.test(normalizedStatus);
+    const isFailed = /fail|error/.test(normalizedStatus);
+    const currentStartedAt = parseDate(submissionState.createdAt) ?? new Date();
+    const statusUpdatedAt = parseDate(submissionState.updatedAt) ?? new Date();
+    const now = new Date();
+
+    // Heuristic: allocate most elapsed time to stage 3 when backend reports stage 3
+    const totalElapsedMs = Math.max(0, now.getTime() - currentStartedAt.getTime());
+    const smallStage2Ms = 30 * 1000; // show 30s for stage 2 when stage 3 is active
+    const stage2Duration = workflowStage >= 3 ? Math.min(smallStage2Ms, totalElapsedMs) : undefined;
+    const stage3DurationMs = workflowStage >= 3 ? Math.max(0, totalElapsedMs - (stage2Duration ?? 0)) : undefined;
+
+    const stage2DurationLabel = stage2Duration ? (Math.floor(stage2Duration / 1000) + 's') : (workflowStage === 2 ? formatDuration(currentStartedAt.toISOString(), now.toISOString()) : '—');
+    const stage3DurationLabel = stage3DurationMs ? (Math.floor(stage3DurationMs / 1000) + 's') : (workflowStage === 3 ? formatDuration(statusUpdatedAt?.toISOString(), now.toISOString()) : '—');
 
     return [
       {
         title: '1. Submitted',
         caption: 'Request accepted',
         startedAt: currentStartedAt,
-        duration: formatDuration(submissionState.createdAt || submissionState.updatedAt, workflowStage >= 2 ? (submissionState.updatedAt || submissionState.createdAt) : undefined),
+        duration: workflowStage === 1 ? formatDuration(currentStartedAt.toISOString(), now.toISOString()) : '0s',
         status: workflowStage === 1 ? 'active' : 'completed',
       },
       {
         title: '2. EDI text → EDI XML',
         caption: 'Normalize the EDI payload and generate XML',
-        startedAt: stage2Start,
-        duration: formatDuration(stage2Start.toISOString(), workflowStage >= 3 ? (stage3Start?.toISOString() || lastUpdatedAt.toISOString()) : (isCompleted || isFailed ? lastUpdatedAt.toISOString() : undefined)),
+        startedAt: currentStartedAt,
+        duration: stage2DurationLabel,
         status: workflowStage === 2 ? 'active' : workflowStage > 2 ? 'completed' : 'pending',
       },
       {
         title: '3. EDI XML → IDOC XML',
         caption: 'Transform the XML into the final IDOC structure',
-        startedAt: stage3Start,
-        duration: formatDuration(stage3Start?.toISOString(), finalStart?.toISOString()),
+        startedAt: workflowStage >= 3 ? statusUpdatedAt : undefined,
+        duration: workflowStage >= 3 ? stage3DurationLabel : '—',
         status: workflowStage === 3 ? 'active' : workflowStage === 4 ? 'completed' : 'pending',
       },
       {
         title: '4. Completed / Failed',
         caption: isFailed ? 'The workflow ended with an error' : isCompleted ? 'The workflow completed successfully' : 'Waiting for the final result',
-        startedAt: finalStart,
+        startedAt: workflowStage === 4 ? statusUpdatedAt : undefined,
         duration: '—',
         status: isFailed ? 'failed' : isCompleted ? 'completed' : 'pending',
       },
@@ -519,17 +545,26 @@ const EDITransform = () => {
                                   )}
                                 </div>
                                 <div className="flex-grow-1 py-1">
-                                  <div className="fw-semibold">{step.title}</div>
-                                  <div className="text-muted small">{step.caption}</div>
-                                  <div className="mt-2 small text-muted">
-                                    <div>Started: {formatDateTime(step.startedAt?.toISOString())}</div>
-                                    <div>Duration: {step.duration}</div>
+                                  <div className="d-flex align-items-start justify-content-between">
+                                    <div>
+                                      <div className="fw-semibold d-flex align-items-center">
+                                        {isActive && <Spinner animation="border" size="sm" className="me-2" />}
+                                        <span>{step.title}</span>
+                                      </div>
+                                      <div className="text-muted small">{step.caption}</div>
+                                      <div className="mt-2 small text-muted">
+                                        <div>Started: {formatDateTime(step.startedAt?.toISOString())}</div>
+                                        <div>Duration: {step.duration}</div>
+                                      </div>
+                                    </div>
+                                    <div className="text-end ms-3">
+                                      <Badge bg={isCompleted ? 'success' : isFailed ? 'danger' : isActive ? 'info' : 'secondary'} className="px-2 py-1">
+                                        {isActive ? getStatusLabel(submissionState.documentStatus || '') : isCompleted ? 'Completed' : isFailed ? 'Failed' : 'Pending'}
+                                      </Badge>
+                                    </div>
                                   </div>
                                   {isActive && (
                                     <div className="mt-2 small fw-semibold text-primary">CURRENT STAGE</div>
-                                  )}
-                                  {isPending && (
-                                    <div className="mt-2 small text-muted">PENDING</div>
                                   )}
                                 </div>
                               </div>
