@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, Table, Button, Badge, Spinner } from 'react-bootstrap';
+import { Card, Table, Button, Badge, Spinner, Modal } from 'react-bootstrap';
 import { documentService, type DocumentRecord } from '../../services/documentService';
 
 type TransactionHistoryRow = {
@@ -16,6 +16,10 @@ const Transactions = () => {
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalContent, setModalContent] = useState('');
+  const [modalLoading, setModalLoading] = useState(false);
 
   useEffect(() => {
     void loadTransactionHistory();
@@ -70,6 +74,105 @@ const Transactions = () => {
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const openArtifactModal = async (documentId: string, xmlType: 'edixml' | 'idocxml') => {
+    if (!documentId) return;
+
+    setModalLoading(true);
+    setModalOpen(true);
+    setModalTitle(xmlType === 'edixml' ? 'EDI XML' : 'IDOC XML');
+    setModalContent('');
+
+    try {
+      const content = await documentService.getTransactionXml(documentId, xmlType);
+      setModalContent(content || 'No artifact available yet.');
+    } catch (err) {
+      console.error('Unable to load artifact', err);
+      setModalContent('Unable to load artifact right now.');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const formatXmlContent = (value: string) => {
+    const trimmed = value?.trim() || '';
+    if (!trimmed) return '';
+
+    try {
+      const parser = new DOMParser();
+      const document = parser.parseFromString(trimmed, 'application/xml');
+      const parserError = document.querySelector('parsererror');
+      if (parserError) {
+        throw new Error('Invalid XML payload');
+      }
+
+      const escapeXml = (value: string) =>
+        value
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&apos;');
+
+      const formatNode = (node: Node, level: number): string => {
+        const indent = '  '.repeat(level);
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent?.trim();
+          return text ? `${indent}${escapeXml(text)}` : '';
+        }
+
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+          return '';
+        }
+
+        const element = node as Element;
+        const attributes = Array.from(element.attributes)
+          .map((attribute) => `${attribute.name}="${escapeXml(attribute.value)}"`)
+          .join(' ');
+        const openingTag = `<${element.tagName}${attributes ? ` ${attributes}` : ''}>`;
+        const closingTag = `</${element.tagName}>`;
+        const childNodes = Array.from(element.childNodes).filter((child) => {
+          if (child.nodeType === Node.TEXT_NODE) return !!child.textContent?.trim();
+          return child.nodeType === Node.ELEMENT_NODE;
+        });
+
+        const childElements = childNodes.filter((child): child is Element => child.nodeType === Node.ELEMENT_NODE);
+        const textChildren = childNodes.filter((child) => child.nodeType === Node.TEXT_NODE);
+        const hasOnlyTextChild = childElements.length === 0 && textChildren.length === 1;
+
+        if (!childNodes.length) {
+          return `${indent}${openingTag}${closingTag}`;
+        }
+
+        if (hasOnlyTextChild) {
+          const textValue = textChildren[0].textContent?.trim() ?? '';
+          return `${indent}${openingTag}${escapeXml(textValue)}${closingTag}`;
+        }
+
+        const innerContent = childNodes.map((child) => formatNode(child, level + 1)).filter(Boolean).join('\n');
+        return `${indent}${openingTag}\n${innerContent}\n${indent}${closingTag}`;
+      };
+
+      const root = document.documentElement;
+      return root ? formatNode(root, 0) : trimmed;
+    } catch {
+      return trimmed;
+    }
+  };
+
+  const handleDownloadArtifact = () => {
+    if (!modalContent) return;
+
+    const blob = new Blob([modalContent], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${modalTitle.toLowerCase().replace(/\s+/g, '-')}.xml`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const getStatusColor = (status: string) => {
@@ -146,8 +249,22 @@ const Transactions = () => {
                     </td>
                     <td>{formatUpdatedAt(tx.updatedAt)}</td>
                     <td>
-                      <Button variant="outline-primary" size="sm" className="me-2">View</Button>
-                      <Button variant="outline-secondary" size="sm" className="me-2">📥 XML</Button>
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        className="me-2"
+                        onClick={() => void openArtifactModal(tx.documentId?.trim() || '', 'edixml')}
+                      >
+                        EDI XML
+                      </Button>
+                      <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        className="me-2"
+                        onClick={() => void openArtifactModal(tx.documentId?.trim() || '', 'idocxml')}
+                      >
+                        IDOC XML
+                      </Button>
                       <Button
                         variant="outline-danger"
                         size="sm"
@@ -170,6 +287,27 @@ const Transactions = () => {
           </Table>
         </Card.Body>
       </Card>
+
+      <Modal show={modalOpen} onHide={() => setModalOpen(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>{modalTitle}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {modalLoading ? (
+            <div className="d-flex align-items-center gap-2 text-muted">
+              <Spinner animation="border" size="sm" /> Loading artifact...
+            </div>
+          ) : (
+            <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', maxHeight: '60vh', overflow: 'auto' }}>{formatXmlContent(modalContent)}</pre>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="outline-primary" onClick={handleDownloadArtifact} disabled={!modalContent || modalLoading}>
+            ⬇ Download
+          </Button>
+          <Button variant="secondary" onClick={() => setModalOpen(false)}>Close</Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };
