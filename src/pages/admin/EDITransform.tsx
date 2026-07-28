@@ -1,4 +1,4 @@
-import { Card, Button, Row, Col, Form, Alert, Badge, Spinner, ProgressBar } from 'react-bootstrap';
+import { Card, Button, Row, Col, Form, Alert, Badge, Spinner } from 'react-bootstrap';
 import { useEffect, useState } from 'react';
 import { documentService } from '../../services/documentService';
 import { tenantService, type TenantRecord } from '../../services/tenantService';
@@ -116,6 +116,8 @@ const EDITransform = () => {
       setRefreshingStatus(true);
     }
 
+    console.log('Workflow status refresh requested for transformation ID:', submissionState.transformationId);
+
     try {
       const jobStatus = await documentService.getTransformationJobStatus(submissionState.transformationId);
       const candidateStatus = jobStatus?.status?.trim() || submissionState.documentStatus || 'Indexed';
@@ -128,10 +130,18 @@ const EDITransform = () => {
           ? 'The workflow is still processing. Click refresh again for the latest update.'
           : 'The workflow status was refreshed from the document API.';
 
+      const statusMessage = recognized ? nextMessage : (jobStatus?.payload ? `Metadata: ${jobStatus.payload}` : nextMessage);
+      console.log('Document API workflow status response:', {
+        transformationId: submissionState.transformationId,
+        status: latestStatus,
+        message: statusMessage,
+        apiResponse: jobStatus,
+      });
+
       setSubmissionState((previous) => ({
         ...previous,
         documentStatus: latestStatus,
-        message: recognized ? nextMessage : (jobStatus?.payload ? `Metadata: ${jobStatus.payload}` : nextMessage),
+        message: statusMessage,
         createdAt: jobStatus?.createdAt || previous.createdAt || new Date().toISOString(),
         updatedAt: jobStatus?.updatedAt || new Date().toISOString(),
       }));
@@ -190,6 +200,13 @@ const EDITransform = () => {
         contentType: extension === 'txt' ? 'text/plain' : extension === 'xml' ? 'application/xml' : 'application/octet-stream',
       };
 
+      console.log('Submitting EDI transformation request to document API:', {
+        tenant: selectedTenant,
+        transactionTypeCode: selectedType,
+        fileName: file.name,
+        payload: documentPayload,
+      });
+
       const uploadedDocument = await documentService.upload(documentPayload, file);
       const documentId = uploadedDocument.id || uploadedDocument.name || 'pending';
       const jobStatus = await documentService.getTransformationJobStatus(documentId);
@@ -198,6 +215,13 @@ const EDITransform = () => {
       const effectiveStatus = recognized ? candidateStatus : (uploadedDocument.status || 'Indexed');
 
       const submittedMessage = 'The upload request was accepted and the transformation workflow has started.';
+      console.log('Initial workflow submission response:', {
+        documentId,
+        status: effectiveStatus,
+        documentResponse: uploadedDocument,
+        workflowResponse: jobStatus,
+      });
+
       setSubmissionState({
         status: 'submitted',
         transformationId: documentId,
@@ -227,24 +251,7 @@ const EDITransform = () => {
     URL.revokeObjectURL(url);
   };
 
-  const getProgressValue = () => {
-    if (loading) return 60;
-    if (submissionState.status !== 'submitted') return 0;
-
-    const status = submissionState.documentStatus.trim().toLowerCase();
-    if (status.includes('pending') || status.includes('queued')) return 35;
-    if (status.includes('process') || status.includes('running')) return 70;
-    return 100;
-  };
-
-  const getProgressLabel = () => {
-    if (loading) return 'Processing';
-    if (submissionState.status !== 'submitted') return 'Idle';
-
-    return submissionState.documentStatus || 'Done';
-  };
-
-  const getStatusBadgeVariant = (status: string) => {
+  const getWorkflowBadgeVariant = (status: string) => {
     const normalized = status.trim().toLowerCase();
     if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
       return 'success';
@@ -258,7 +265,7 @@ const EDITransform = () => {
     return 'secondary';
   };
 
-  const getStatusLabel = (status: string) => {
+  const getWorkflowStageLabel = (status: string) => {
     const normalized = status.trim().toLowerCase();
     if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
       return 'Completed';
@@ -266,19 +273,16 @@ const EDITransform = () => {
     if (normalized.includes('fail') || normalized.includes('error')) {
       return 'Failed';
     }
+    if (normalized.includes('pending') || normalized.includes('processing') || normalized.includes('running') || normalized.includes('queue')) {
+      return 'Stage 3 • In progress';
+    }
     if (normalized.includes('edi_text_to_edi_xml')) {
-      return 'EDI text → EDI XML';
+      return 'Stage 2 • EDI text → EDI XML';
     }
     if (normalized.includes('edi_xml_to_idoc_xml')) {
-      return 'EDI XML → IDOC XML';
+      return 'Stage 3 • EDI XML → IDOC XML';
     }
-    if (normalized.includes('processing') || normalized.includes('running') || normalized.includes('queue')) {
-      return 'Processing';
-    }
-    if (normalized.includes('pending')) {
-      return 'Pending';
-    }
-    return 'Submitted';
+    return 'Stage 1 • Submitted';
   };
 
   const parseDate = (value?: string) => {
@@ -324,19 +328,34 @@ const EDITransform = () => {
     if (normalized.includes('fail') || normalized.includes('error')) {
       return 4;
     }
-    if (normalized.includes('edi_xml_to_idoc_xml')) {
+    if (normalized.includes('pending') || normalized.includes('processing') || normalized.includes('running') || normalized.includes('queue')) {
       return 3;
     }
     if (normalized.includes('edi_text_to_edi_xml')) {
       return 2;
     }
-    if (normalized.includes('processing') || normalized.includes('pending')) {
-      return 2;
+    if (normalized.includes('edi_xml_to_idoc_xml')) {
+      return 3;
     }
     return 1;
   };
 
+  const getWorkflowStepStates = (status: string) => {
+    const normalized = status.trim().toLowerCase();
+    const isCompleted = /complete|success|done/.test(normalized);
+    const isFailed = /fail|error/.test(normalized);
+    const workflowStage = getWorkflowStage(status);
+
+    return {
+      step1: workflowStage >= 1 ? 'completed' : 'active',
+      step2: workflowStage >= 2 ? 'completed' : 'pending',
+      step3: workflowStage === 4 ? 'completed' : workflowStage >= 3 ? 'active' : 'pending',
+      step4: isFailed ? 'failed' : isCompleted ? 'completed' : 'pending',
+    };
+  };
+
   const workflowStage = getWorkflowStage(submissionState.documentStatus || 'submitted');
+  const workflowStepStates = getWorkflowStepStates(submissionState.documentStatus || 'submitted');
   const workflowSteps = (() => {
     const normalizedStatus = (submissionState.documentStatus || '').trim().toLowerCase();
     const isCompleted = /complete|success|done/.test(normalizedStatus);
@@ -345,9 +364,8 @@ const EDITransform = () => {
     const statusUpdatedAt = parseDate(submissionState.updatedAt) ?? new Date();
     const now = new Date();
 
-    // Heuristic: allocate most elapsed time to stage 3 when backend reports stage 3
     const totalElapsedMs = Math.max(0, now.getTime() - currentStartedAt.getTime());
-    const smallStage2Ms = 30 * 1000; // show 30s for stage 2 when stage 3 is active
+    const smallStage2Ms = 30 * 1000;
     const stage2Duration = workflowStage >= 3 ? Math.min(smallStage2Ms, totalElapsedMs) : undefined;
     const stage3DurationMs = workflowStage >= 3 ? Math.max(0, totalElapsedMs - (stage2Duration ?? 0)) : undefined;
 
@@ -360,28 +378,28 @@ const EDITransform = () => {
         caption: 'Request accepted',
         startedAt: currentStartedAt,
         duration: workflowStage === 1 ? formatDuration(currentStartedAt.toISOString(), now.toISOString()) : '0s',
-        status: workflowStage === 1 ? 'active' : 'completed',
+        status: workflowStepStates.step1 === 'active' ? 'active' : workflowStepStates.step1 === 'completed' ? 'completed' : 'pending',
       },
       {
         title: '2. EDI text → EDI XML',
         caption: 'Normalize the EDI payload and generate XML',
         startedAt: currentStartedAt,
         duration: stage2DurationLabel,
-        status: workflowStage === 2 ? 'active' : workflowStage > 2 ? 'completed' : 'pending',
+        status: workflowStepStates.step2 === 'active' ? 'active' : workflowStepStates.step2 === 'completed' ? 'completed' : 'pending',
       },
       {
         title: '3. EDI XML → IDOC XML',
         caption: 'Transform the XML into the final IDOC structure',
         startedAt: workflowStage >= 3 ? statusUpdatedAt : undefined,
         duration: workflowStage >= 3 ? stage3DurationLabel : '—',
-        status: workflowStage === 3 ? 'active' : workflowStage === 4 ? 'completed' : 'pending',
+        status: workflowStepStates.step3 === 'active' ? 'active' : workflowStepStates.step3 === 'completed' ? 'completed' : 'pending',
       },
       {
         title: '4. Completed / Failed',
         caption: isFailed ? 'The workflow ended with an error' : isCompleted ? 'The workflow completed successfully' : 'Waiting for the final result',
         startedAt: workflowStage === 4 ? statusUpdatedAt : undefined,
         duration: '—',
-        status: isFailed ? 'failed' : isCompleted ? 'completed' : 'pending',
+        status: workflowStepStates.step4 === 'failed' ? 'failed' : workflowStepStates.step4 === 'completed' ? 'completed' : 'pending',
       },
     ];
   })();
@@ -459,13 +477,6 @@ const EDITransform = () => {
                 </div>
               </div>
 
-              <div className="mt-4">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <strong>Progress</strong>
-                  <span className="text-muted small">{getProgressLabel()}</span>
-                </div>
-                <ProgressBar now={getProgressValue()} label={getProgressLabel()} />
-              </div>
             </Card.Body>
           </Card>
         </Col>
@@ -480,8 +491,8 @@ const EDITransform = () => {
                 </div>
                 <div className="d-flex align-items-center gap-2">
                   {submissionState.status === 'submitted' ? (
-                    <Badge bg={getStatusBadgeVariant(submissionState.documentStatus || 'submitted')}>
-                      {getStatusLabel(submissionState.documentStatus || 'submitted')}
+                    <Badge bg={getWorkflowBadgeVariant(submissionState.documentStatus || 'submitted')}>
+                      {getWorkflowStageLabel(submissionState.documentStatus || 'submitted')}
                     </Badge>
                   ) : (
                     <Badge bg="secondary">Idle</Badge>
@@ -500,8 +511,8 @@ const EDITransform = () => {
                           <div className="fw-semibold">Results returned by the document API</div>
                           <div className="text-muted small">Live workflow execution details</div>
                         </div>
-                        <Badge bg={getStatusBadgeVariant(submissionState.documentStatus || 'submitted')} className="px-3 py-2">
-                          {getStatusLabel(submissionState.documentStatus || 'submitted').toUpperCase()}
+                        <Badge bg={getWorkflowBadgeVariant(submissionState.documentStatus || 'submitted')} className="px-3 py-2">
+                          {getWorkflowStageLabel(submissionState.documentStatus || 'submitted').toUpperCase()}
                         </Badge>
                       </div>
 
@@ -559,7 +570,7 @@ const EDITransform = () => {
                                     </div>
                                     <div className="text-end ms-3">
                                       <Badge bg={isCompleted ? 'success' : isFailed ? 'danger' : isActive ? 'info' : 'secondary'} className="px-2 py-1">
-                                        {isActive ? getStatusLabel(submissionState.documentStatus || '') : isCompleted ? 'Completed' : isFailed ? 'Failed' : 'Pending'}
+                                        {isActive ? getWorkflowStageLabel(submissionState.documentStatus || '') : isCompleted ? 'Completed' : isFailed ? 'Failed' : 'Pending'}
                                       </Badge>
                                     </div>
                                   </div>
